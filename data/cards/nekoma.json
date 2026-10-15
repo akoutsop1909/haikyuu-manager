@@ -1,0 +1,184 @@
+[
+  {
+    "id": "mb_kuroo_s5",
+    "name": "Tetsurō Kuroo",
+    "school": "Nekoma",
+    "position": "MB",
+    "rarity": "S5",
+    "birthday": "11-17",
+    "embed_color": "0xCC0000",
+    "quote": "We are like blood in our veins. We must flow without stopping and keep oxygen moving, so that the 'brain' can work normally.",
+    "image_file": "mb_kuroo_s5.jpg",
+    "base_stats": {
+      "spike": 210,
+      "block": 280,
+      "receive": 200,
+      "set": 110,
+      "serve": 200
+    }
+  },
+  {
+    "id": "s_kenma_s5",
+    "name": "Kenma Kozume",
+    "school": "Nekoma",
+    "position": "S",
+    "rarity": "S5",
+    "specialty_id": "floor_control",
+    "birthday": "10-16",
+    "embed_color": "0xCC0000",
+    "quote": "I'm not doing this because it's fun. I'm doing it because I don't want to lose.",
+    "image_file": "s_kenma_s5.jpg",
+    "base_stats": {
+      "spike": 110,
+      "block": 110,
+      "receive": 270,
+      "set": 360,
+      "serve": 150
+    }
+  },
+  {
+    "id": "l_yaku_s4",
+    "name": "Morisuke Yaku",
+    "school": "Nekoma",
+    "position": "L",
+    "rarity": "S4",
+    "birthday": "08-08",
+    "embed_color": "0xCC0000",
+    "quote": "A clean receive doesn't just stop an attack; it breaks the spiker's heart.",
+    "image_file": "l_yaku_s4.jpg",
+    "base_stats": {
+      "spike": 0,
+      "block": 0,
+      "receive": 290,
+      "set": 110,
+      "serve": 0
+    }
+  },
+  {
+    "id": "ws_yamamoto_s4",
+    "name": "Taketora Yamamoto",
+    "school": "Nekoma",
+    "position": "WS",
+    "rarity": "S4",
+    "birthday": "02-22",
+    "embed_color": "0xCC0000",
+    "quote": "The one who stays on the court is the winner!",
+    "image_file": "ws_yamamoto_s4.jpg",
+    "base_stats": {
+      "spike": 250,
+      "block": 120,
+      "receive": 170,
+      "set": 50,
+      "serve": 135
+    }
+  },
+  {
+    "id": "ws_fukunaga_s4",
+    "name": "Shōhei Fukunaga",
+    "school": "Nekoma",
+    "position": "WS",
+    "rarity": "S4",
+    "birthday": "09-29",
+    "embed_color": "0xCC0000",
+    "quote": "...",
+    "image_file": "ws_fukunaga_s4.jpg",
+    "base_stats": {
+      "spike": 220,
+      "block": 130,
+      "receive": 210,
+      "set": 60,
+      "serve": 105
+    }
+  },
+  {
+    "id": "op_kai_s4",
+    "name": "Nobuyuki Kai",
+    "school": "Nekoma",
+    "position": "OP",
+    "rarity": "S4",
+    "birthday": "04-08",
+    "embed_color": "0xCC0000",
+    "quote": "As long as Kuroo and Yaku are here, our foundation won't shake.",
+    "image_file": "op_kai_s4.jpg",
+    "base_stats": {
+      "spike": 170,
+      "block": 150,
+      "receive": 245,
+      "set": 60,
+      "serve": 100
+    }
+  },
+  {
+    "id": "mb_lev_s4",
+    "name": "Lev Haiba",
+    "school": "Nekoma",
+    "position": "MB",
+    "rarity": "S4",
+    "birthday": "10-30",
+    "embed_color": "0xCC0000",
+    "quote": "The ace is the one who scores the most points!",
+    "image_file": "mb_lev_s4.webp",
+    "base_stats": {
+      "spike": 270,
+      "block": 235,
+      "receive": 50,
+      "set": 40,
+      "serve": 130
+    }
+  },
+  {
+    "id": "mb_inuoka_s3",
+    "name": "Sō Inuoka",
+    "school": "Nekoma",
+    "position": "MB",
+    "rarity": "S3",
+    "birthday": "11-01",
+    "embed_color": "0xCC0000",
+    "quote": "Bwan! Whoosh! Then... WHAM!",
+    "image_file": "mb_inuoka_s3.jpg",
+    "base_stats": {
+      "spike": 120,
+      "block": 160,
+      "receive": 110,
+      "set": 50,
+      "serve": 85
+    }
+  },
+  {
+    "id": "s_teshiro_s3",
+    "name": "Tamahiko Teshiro",
+    "school": "Nekoma",
+    "position": "S",
+    "rarity": "S3",
+    "specialty_id": "floor_control",
+    "birthday": "01-14",
+    "embed_color": "0xCC0000",
+    "quote": "I'll carry out my instructions as calculatingly as possible.",
+    "image_file": "s_teshiro_s3.jpg",
+    "base_stats": {
+      "spike": 70,
+      "block": 80,
+      "receive": 110,
+      "set": 185,
+      "serve": 80
+    }
+  },
+  {
+    "id": "l_shibayama_s3",
+    "name": "Yūki Shibayama",
+    "school": "Nekoma",
+    "position": "L",
+    "rarity": "S3",
+    "birthday": "12-16",
+    "embed_color": "0xCC0000",
+    "quote": "I can't receive like Yaku, but I can cover the team's back!",
+    "image_file": "l_shibayama_s3.jpg",
+    "base_stats": {
+      "spike": 0,
+      "block": 0,
+      "receive": 200,
+      "set": 90,
+      "serve": 0
+    }
+  }
+]

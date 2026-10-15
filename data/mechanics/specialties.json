@@ -1,0 +1,36 @@
+[
+  {
+    "id": "precision_set",
+    "name": "Precision Set",
+    "description": "Boosts team SPIKE by 25% of Setter's SET stat. Reduces opponent BLOCK by 10%.",
+    "type": "scaling_boost",
+    "source_stat": "set",
+    "team_boost": { "stat": "spike", "ratio": 0.25 },
+    "opponent_debuff": { "stat": "block", "percent": 0.10 }
+  },
+  {
+    "id": "wall_breaker",
+    "name": "Wall Breaker",
+    "description": "Boosts team SPIKE by 10%. Reduces opponent RECEIVE by 15%.",
+    "type": "percentage_debuff",
+    "team_boost": { "stat": "spike", "percent": 0.10 },
+    "opponent_debuff": { "stat": "receive", "percent": 0.15 }
+  },
+  {
+    "id": "floor_control",
+    "name": "Floor Control",
+    "description": "Boosts team RECEIVE by 15%. Reduces opponent SPIKE by 15% of Setter's SET stat.",
+    "type": "scaling_debuff",
+    "source_stat": "set",
+    "team_boost": { "stat": "receive", "percent": 0.15 },
+    "opponent_debuff": { "stat": "spike", "ratio": 0.15 }
+  },
+  {
+    "id": "service_cannon",
+    "name": "Service Cannon",
+    "description": "Boosts team SERVE by 15%. Reduces opponent Setter's SET stat by 15%.",
+    "type": "rotation_disrupt",
+    "team_boost": { "stat": "serve", "percent": 0.15 },
+    "opponent_debuff": { "stat": "set", "percent": 0.15 }
+  }
+]

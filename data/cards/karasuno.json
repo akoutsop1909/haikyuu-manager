@@ -1,0 +1,220 @@
+[
+  {
+    "id": "s_kageyama_s5",
+    "name": "Tobio Kageyama",
+    "school": "Karasuno",
+    "position": "S",
+    "rarity": "S5",
+    "specialty_id": "precision_set",
+    "birthday": "12-22",
+    "embed_color": "0xFF6600",
+    "quote": "As long as I'm here, you're invincible!",
+    "image_file": "s_kageyama_s5.jpg",
+    "base_stats": {
+      "spike": 190,
+      "block": 170,
+      "receive": 160,
+      "set": 260,
+      "serve": 220
+    }
+  },
+  {
+    "id": "l_nishinoya_s5",
+    "name": "Yū Nishinoya",
+    "school": "Karasuno",
+    "position": "L",
+    "rarity": "S5",
+    "birthday": "10-10",
+    "embed_color": "0xFF6600",
+    "quote": "My only job is to keep the ball from hitting the floor!",
+    "image_file": "l_nishinoya_s5.jpg",
+    "base_stats": {
+      "spike": 0,
+      "block": 0,
+      "receive": 350,
+      "set": 180,
+      "serve": 0
+    }
+  },
+  {
+    "id": "op_daichi_s4",
+    "name": "Daichi Sawamura",
+    "school": "Karasuno",
+    "position": "OP",
+    "rarity": "S4",
+    "birthday": "12-31",
+    "embed_color": "0xFF6600",
+    "quote": "We'll never win if we don't believe we can.",
+    "image_file": "op_daichi_s4.jpg",
+    "base_stats": {
+      "spike": 170,
+      "block": 140,
+      "receive": 235,
+      "set": 60,
+      "serve": 120
+    }
+  },
+  {
+    "id": "ws_tanaka_s4",
+    "name": "Ryūnosuke Tanaka",
+    "school": "Karasuno",
+    "position": "WS",
+    "rarity": "S4",
+    "birthday": "03-03",
+    "embed_color": "0xFF6600",
+    "quote": "Being mediocre doesn't mean I'm weak!",
+    "image_file": "ws_tanaka_s4.jpg",
+    "base_stats": {
+      "spike": 245,
+      "block": 130,
+      "receive": 140,
+      "set": 60,
+      "serve": 150
+    }
+  },
+  {
+    "id": "ws_asahi_s4",
+    "name": "Asahi Azumane",
+    "school": "Karasuno",
+    "position": "WS",
+    "rarity": "S4",
+    "birthday": "01-01",
+    "embed_color": "0xFF6600",
+    "quote": "To overcome any wall... that's the Ace's job!",
+    "image_file": "ws_asahi_s4.jpg",
+    "base_stats": {
+      "spike": 265,
+      "block": 110,
+      "receive": 110,
+      "set": 40,
+      "serve": 200
+    }
+  },
+  {
+    "id": "mb_hinata_s4",
+    "name": "Shōyō Hinata",
+    "school": "Karasuno",
+    "position": "MB",
+    "rarity": "S4",
+    "birthday": "06-21",
+    "embed_color": "0xFF6600",
+    "quote": "The view from the top... it's a wall I can't see over on my own.",
+    "image_file": "mb_hinata_s4.jpg",
+    "base_stats": {
+      "spike": 230,
+      "block": 150,
+      "receive": 175,
+      "set": 50,
+      "serve": 120
+    }
+  },
+  {
+    "id": "mb_tsukishima_s4",
+    "name": "Kei Tsukishima",
+    "school": "Karasuno",
+    "position": "MB",
+    "rarity": "S4",
+    "birthday": "09-27",
+    "embed_color": "0xFF6600",
+    "quote": "It's just a club activity.",
+    "image_file": "mb_tsukishima_s4.jpg",
+    "base_stats": {
+      "spike": 180,
+      "block": 270,
+      "receive": 100,
+      "set": 50,
+      "serve": 125
+    }
+  },
+  {
+    "id": "s_sugawara_s3",
+    "name": "Kōshi Sugawara",
+    "school": "Karasuno",
+    "position": "S",
+    "rarity": "S3",
+    "specialty_id": "floor_control",
+    "birthday": "06-13",
+    "embed_color": "0xFF6600",
+    "quote": "We get the chance to fight again. And as long as we're here, our options aren't zero.",
+    "image_file": "s_sugawara_s3.jpg",
+    "base_stats": {
+      "spike": 80,
+      "block": 60,
+      "receive": 110,
+      "set": 140,
+      "serve": 135
+    }
+  },
+  {
+    "id": "ws_ennoshita_s3",
+    "name": "Chikara Ennoshita",
+    "school": "Karasuno",
+    "position": "WS",
+    "rarity": "S3",
+    "birthday": "12-26",
+    "embed_color": "0xFF6600",
+    "quote": "I know I'm not Daichi. But right now, I'm the one wearing this jersey on the court.",
+    "image_file": "ws_ennoshita_s3.jpg",
+    "base_stats": {
+      "spike": 125,
+      "block": 100,
+      "receive": 150,
+      "set": 60,
+      "serve": 90
+    }
+  },
+  {
+    "id": "ws_kinoshita_s3",
+    "name": "Hisashi Kinoshita",
+    "school": "Karasuno",
+    "position": "WS",
+    "rarity": "S3",
+    "birthday": "02-15",
+    "embed_color": "0xFF6600",
+    "quote": "I won't let my chance on the court go to waste!",
+    "image_file": "ws_kinoshita_s3.jpg",
+    "base_stats": {
+      "spike": 110,
+      "block": 75,
+      "receive": 100,
+      "set": 50,
+      "serve": 190
+    }
+  },
+  {
+    "id": "mb_narita_s3",
+    "name": "Kazuhito Narita",
+    "school": "Karasuno",
+    "position": "MB",
+    "rarity": "S3",
+    "birthday": "08-17",
+    "embed_color": "0xFF6600",
+    "quote": "I'll hold down the center position whenever I'm called up.",
+    "image_file": "mb_narita_s3.jpg",
+    "base_stats": {
+      "spike": 130,
+      "block": 180,
+      "receive": 75,
+      "set": 50,
+      "serve": 90
+    }
+  },
+  {
+    "id": "mb_yamaguchi_s3",
+    "name": "Tadashi Yamaguchi",
+    "school": "Karasuno",
+    "position": "MB",
+    "rarity": "S3",
+    "birthday": "11-10",
+    "embed_color": "0xFF6600",
+    "quote": "Give me a chance to stand on that court, too!",
+    "image_file": "mb_yamaguchi_s3.jpg",
+    "base_stats": {
+      "spike": 90,
+      "block": 100,
+      "receive": 80,
+      "set": 50,
+      "serve": 205
+    }
+  }
+]

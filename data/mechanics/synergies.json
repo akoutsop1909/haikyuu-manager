@@ -1,0 +1,29 @@
+[
+  {
+    "id": "karasuno",
+    "school": "Karasuno",
+    "description": "All players gain +10% SPIKE and +10% SERVE.",
+    "boosts": [
+      { "stat": "spike", "percent": 0.10 },
+      { "stat": "serve", "percent": 0.10 }
+    ]
+  },
+  {
+    "id": "nekoma",
+    "school": "Nekoma",
+    "description": "All players gain +10% RECEIVE and +10% BLOCK.",
+    "boosts": [
+      { "stat": "receive", "percent": 0.10 },
+      { "stat": "block", "percent": 0.10 }
+    ]
+  },
+  {
+    "id": "aoba_johsai",
+    "school": "Aoba Johsai",
+    "description": "All players gain +10% SERVE and +10% SET.",
+    "boosts": [
+      { "stat": "serve", "percent": 0.10 },
+      { "stat": "set", "percent": 0.10 }
+    ]
+  }
+]

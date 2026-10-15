@@ -1,0 +1,103 @@
+{
+  "STARTER_PACK": {
+    "scout_coins": 1000,
+    "practice_balls": 5000,
+    "cards": [
+      "s_kageyama_s5",
+      "op_daichi_s4",
+      "ws_asahi_s4",
+      "ws_tanaka_s4",
+      "mb_hinata_s4",
+      "mb_tsukishima_s4",
+      "l_nishinoya_s5",
+      "mb_yamaguchi_s3"
+    ]
+  },
+  "DAILY_REWARD": {
+    "scout_coins": 100,
+    "practice_balls": 1500
+  },
+  "BIRTHDAY_REWARD": {
+    "base": {
+      "scout_coins": 200,
+      "practice_balls": 2000
+    },
+    "owner_bonus_by_rarity": {
+      "S3": {
+        "scout_coins": 50,
+        "practice_balls": 500
+      },
+      "S4": {
+        "scout_coins": 100,
+        "practice_balls": 1000
+      },
+      "S5": {
+        "scout_coins": 250,
+        "practice_balls": 2500
+      }
+    }
+  },
+  "SCOUT": {
+    "cost_per_pull": 100,
+    "max_resonance": 5,
+    "overflow_vouchers_by_rarity": {
+      "S3": 1,
+      "S4": 3,
+      "S5": 10
+    },
+    "rarity_weights": {
+      "S3": 70,
+      "S4": 25,
+      "S5": 5
+    }
+  },
+  "TRAINING": {
+    "max_level": 100,
+    "max_resonance": 5,
+    "drink_craft_cost": 20,
+    "base_cost": 20,
+    "cost_growth_rate": 1.045,
+    "stat_boost_per_level": {
+      "S3": 0.018,
+      "S4": 0.020,
+      "S5": 0.022
+    },
+    "stat_boost_per_resonance": {
+      "S3": 0.03,
+      "S4": 0.04,
+      "S5": 0.05
+    },
+    "resonance_drink_cost_by_rarity": {
+      "S3": 1,
+      "S4": 3,
+      "S5": 5
+    },
+    "rarity_cost_multipliers": {
+      "S3": 1.0,
+      "S4": 1.2,
+      "S5": 1.5
+    }
+  },
+  "TEAM": {
+    "max_lineups": 6,
+    "min_synergy_players": 4
+  },
+  "TOKYO_TRIP": {
+    "min_s3_s4_owned": 17,
+    "allowed_rarities": [
+      "S3",
+      "S4"
+    ],
+    "min_players": 1,
+    "max_players": 5,
+    "max_duration_hours": 12,
+    "milestone_interval_hours": 3,
+    "exhaustion_hours": 8
+  },
+  "ADMIN_PACK": {
+    "scout_coins": 10000000,
+    "practice_balls": 100000000,
+    "sports_drinks": 100,
+    "drink_vouchers": 200
+  }
+}

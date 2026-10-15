@@ -1,0 +1,166 @@
+[
+  {
+    "id": "s_oikawa_s5",
+    "name": "Tōru Oikawa",
+    "school": "Aoba Johsai",
+    "position": "S",
+    "rarity": "S5",
+    "specialty_id": "precision_set",
+    "birthday": "07-20",
+    "embed_color": "0x1B9AAA",
+    "quote": "Talent is something you make bloom, instinct is something you polish!",
+    "image_file": "s_oikawa_s5.jpg",
+    "base_stats": {
+      "spike": 180,
+      "block": 150,
+      "receive": 150,
+      "set": 270,
+      "serve": 250
+    }
+  },
+  {
+    "id": "ws_iwaizumi_s5",
+    "name": "Hajime Iwaizumi",
+    "school": "Aoba Johsai",
+    "position": "WS",
+    "rarity": "S5",
+    "birthday": "06-10",
+    "embed_color": "0x1B9AAA",
+    "quote": "A team with six strong players is stronger!",
+    "image_file": "ws_iwaizumi_s5.jpg",
+    "base_stats": {
+      "spike": 285,
+      "block": 150,
+      "receive": 195,
+      "set": 70,
+      "serve": 200
+    }
+  },
+  {
+    "id": "mb_matsukawa_s4",
+    "name": "Issei Matsukawa",
+    "school": "Aoba Johsai",
+    "position": "MB",
+    "rarity": "S4",
+    "birthday": "03-01",
+    "embed_color": "0x1B9AAA",
+    "quote": "No matter how impressive your quick attack is, if it gets narrowed down, it isn't scary.",
+    "image_file": "mb_matsukawa_s4.jpg",
+    "base_stats": {
+      "spike": 170,
+      "block": 250,
+      "receive": 125,
+      "set": 60,
+      "serve": 120
+    }
+  },
+  {
+    "id": "ws_hanamaki_s4",
+    "name": "Takahiro Hanamaki",
+    "school": "Aoba Johsai",
+    "position": "WS",
+    "rarity": "S4",
+    "birthday": "01-27",
+    "embed_color": "0x1B9AAA",
+    "quote": "Don't worry, Oikawa! I'll cover the set!",
+    "image_file": "ws_hanamaki_s4.jpg",
+    "base_stats": {
+      "spike": 200,
+      "block": 135,
+      "receive": 180,
+      "set": 90,
+      "serve": 120
+    }
+  },
+  {
+    "id": "mb_kindaichi_s4",
+    "name": "Yūtarō Kindaichi",
+    "school": "Aoba Johsai",
+    "position": "MB",
+    "rarity": "S4",
+    "birthday": "06-06",
+    "embed_color": "0x1B9AAA",
+    "quote": "I'll spike any set Oikawa sends my way!",
+    "image_file": "mb_kindaichi_s4.jpg",
+    "base_stats": {
+      "spike": 235,
+      "block": 210,
+      "receive": 80,
+      "set": 60,
+      "serve": 140
+    }
+  },
+  {
+    "id": "op_kyotani_s4",
+    "name": "Kentarō Kyōtani",
+    "school": "Aoba Johsai",
+    "position": "OP",
+    "rarity": "S4",
+    "birthday": "12-07",
+    "embed_color": "0x1B9AAA",
+    "quote": "Get out of my way! I'm hitting it!",
+    "image_file": "op_kyotani_s4.jpg",
+    "base_stats": {
+      "spike": 285,
+      "block": 110,
+      "receive": 70,
+      "set": 40,
+      "serve": 220
+    }
+  },
+  {
+    "id": "l_watari_s4",
+    "name": "Shinji Watari",
+    "school": "Aoba Johsai",
+    "position": "L",
+    "rarity": "S4",
+    "birthday": "04-03",
+    "embed_color": "0x1B9AAA",
+    "quote": "As a former setter, I'll set up the backline attack if needed!",
+    "image_file": "l_watari_s4.jpg",
+    "base_stats": {
+      "spike": 0,
+      "block": 0,
+      "receive": 270,
+      "set": 170,
+      "serve": 0
+    }
+  },
+  {
+    "id": "op_kunimi_s3",
+    "name": "Akira Kunimi",
+    "school": "Aoba Johsai",
+    "position": "OP",
+    "rarity": "S3",
+    "birthday": "03-25",
+    "embed_color": "0x1B9AAA",
+    "quote": "Wasting energy in the early sets is inefficient.",
+    "image_file": "op_kunimi_s3.jpg",
+    "base_stats": {
+      "spike": 145,
+      "block": 90,
+      "receive": 140,
+      "set": 60,
+      "serve": 90
+    }
+  },
+  {
+    "id": "s_yahaba_s3",
+    "name": "Shigeru Yahaba",
+    "school": "Aoba Johsai",
+    "position": "S",
+    "rarity": "S3",
+    "specialty_id": "precision_set",
+    "birthday": "03-01",
+    "embed_color": "0x1B9AAA",
+    "quote": "Do you think you're the only one who cares about winning?!",
+    "image_file": "s_yahaba_s3.jpg",
+    "base_stats": {
+      "spike": 90,
+      "block": 60,
+      "receive": 90,
+      "set": 185,
+      "serve": 100
+    }
+  }
+]
