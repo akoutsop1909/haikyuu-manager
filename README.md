@@ -15,7 +15,7 @@ A multipurpose Discord bot featuring automated Japanese-to-English Twitter/X tra
 
 **In Active Development:**
 * 🚌 **Trip**: Tokyo training camp idle rewards
-* 📄 **JSON Data**: Generating card stats and opponent files
+* 📄 **JSON Data**: Card stats and boosts, and opponent files
 
 **Planned (Not Started):**
 * ⚔️ **Match**: PvE match engine
