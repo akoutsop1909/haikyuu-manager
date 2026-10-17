@@ -1,43 +1,44 @@
+import asyncio
 import discord
 
-from ui.gacha import UserHomeView
-from ui.utils import create_card_embed, get_card_image_file, format_number, PositionFilterSelectMenu, CardSelectMenu, BaseCardRosterView
-from database import get_inventory, get_user_cards, get_level_cost, train_card, craft_drink, increase_resonance, TRAINING_CONFIG
+from ui.utils import create_card_embed, format_number, PositionFilterSelectMenu, CardSelectMenu, BaseCardRosterView
+from data_loader import TRAINING_CONFIG
+from database import get_inventory, get_user_cards, get_level_cost, train_card, craft_drink, increase_resonance
 
 # Load training configurations
-MAX_LVL = TRAINING_CONFIG.get("max_level", 100)
-MAX_RES = TRAINING_CONFIG.get("max_resonance", 5)
-CRAFT_VOUCHER_COST = TRAINING_CONFIG.get("drink_craft_cost", 20)
-COSTS = TRAINING_CONFIG.get("resonance_drink_cost_by_rarity", {"S3": 1, "S4": 3, "S5": 5})
+MAX_LVL = TRAINING_CONFIG["max_level"]
+MAX_RES = TRAINING_CONFIG["max_resonance"]
+CRAFT_VOUCHER_COST = TRAINING_CONFIG["drink_craft_cost"]
+COSTS = TRAINING_CONFIG["resonance_drink_cost_by_rarity"]
 
 class TrainScreenView(BaseCardRosterView):
-    def __init__(self, user_id: int, user_cards: list[dict], selected_card_id: str | None = None):
+    def __init__(self, user_id: int, user_cards: list[dict], inventory, selected_card_id: str | None = None):
         super().__init__(user_id, user_cards, selected_card_id)
+        self.inventory = inventory
         self._setup_components()
 
     @classmethod
     async def create(cls, user_id: int, selected_card_id: str | None = None):
-        user_cards = await get_user_cards(user_id)
-        view = cls(user_id, user_cards, selected_card_id)
+        # Fetch cards and inventory concurrently to save a round-trip!
+        user_cards, inventory = await asyncio.gather(
+            get_user_cards(user_id),
+            get_inventory(user_id)
+        )
+        view = cls(user_id, user_cards, inventory, selected_card_id)
 
         content, embed, attachments = await view._get_screen_payload()
         return view, content, embed, attachments
 
     async def build_embed(self) -> discord.Embed:
-        inventory = await get_inventory(self.user_id)
-        filtered_cards = self.get_filtered_cards()
+        target_card = self._get_target_card()
 
-        target_card = next((c for c in filtered_cards if c["id"] == self.selected_card_id), filtered_cards[0])
         current_lvl = target_card["level"]
-        current_res = target_card.get("resonance", 0)
-        rarity = target_card.get("rarity", "S3")
+        current_res = target_card["resonance"]
+        rarity = target_card["rarity"]
 
         scaled_stats = target_card.get("scaled_stats", target_card.get("base_stats", {}))
 
-        embed = create_card_embed(
-            target_card,
-            extra_stats=scaled_stats,
-        )
+        embed = create_card_embed(target_card, extra_stats=scaled_stats)
 
         # 1. Level Upgrade Section
         if current_lvl < MAX_LVL:
@@ -73,34 +74,21 @@ class TrainScreenView(BaseCardRosterView):
 
         embed.set_footer(
             text=
-            f"Balance: 🏐 {format_number(inventory.practice_balls)}  •  "
-            f"🥤 {format_number(inventory.sports_drinks)}  •  "
-            f"🎟️ {format_number(inventory.drink_vouchers)}"
+            f"Balance: 🏐 {format_number(self.inventory.practice_balls)}  •  "
+            f"🥤 {format_number(self.inventory.sports_drinks)}  •  "
+            f"🎟️ {format_number(self.inventory.drink_vouchers)}"
         )
 
         return embed
 
     def _setup_components(self):
-        self.clear_items()
-        if not self.user_cards:
-            return
+        filtered_cards, page_cards, max_pages, page_info = self._setup_pagination()
 
-        filtered_cards = self.get_filtered_cards()
-        page_cards, max_pages = self.get_paged_cards(filtered_cards)
+        # Fetch selected card data cleanly using the helper
+        target_card = self._get_target_card(filtered_cards)
 
-        if page_cards:
-            if not self.selected_card_id or not any(c["id"] == self.selected_card_id for c in filtered_cards):
-                self.selected_card_id = page_cards[0]["id"]
-        else:
-            self.selected_card_id = None
-
-        page_info = f"(Page {self.current_page + 1}/{max_pages})" if max_pages > 1 else ""
-
-        # Fetch selected card data for button states
-        target_card = next((c for c in filtered_cards if c["id"] == self.selected_card_id), None) if self.selected_card_id else None
-
-        is_max_level = target_card and target_card.get("level", 1) >= MAX_LVL
-        is_max_resonance = target_card and target_card.get("resonance", 0) >= MAX_RES
+        is_max_level = target_card and target_card["level"] >= MAX_LVL
+        is_max_resonance = target_card and target_card["resonance"] >= MAX_RES
 
         # Row 0: Position Filter
         self.add_item(PositionFilterSelectMenu(self.user_cards, self.selected_position, row=0))
@@ -115,8 +103,7 @@ class TrainScreenView(BaseCardRosterView):
         btn_10 = discord.ui.Button(label="+10 Lv", style=discord.ButtonStyle.primary, row=2)
         btn_max = discord.ui.Button(label="Train MAX", style=discord.ButtonStyle.success, row=2)
 
-        has_card = self.selected_card_id is not None
-        disable_train = (not has_card) or is_max_level
+        disable_train = is_max_level
 
         btn_1.disabled = disable_train
         btn_5.disabled = disable_train
@@ -137,7 +124,7 @@ class TrainScreenView(BaseCardRosterView):
         btn_res = discord.ui.Button(label="+1 Resonance", style=discord.ButtonStyle.primary, row=3)
         btn_exchange = discord.ui.Button(label="Craft Sports Drink", style=discord.ButtonStyle.secondary, emoji="🥤", row=3)
 
-        btn_res.disabled = (not has_card) or is_max_resonance
+        btn_res.disabled = is_max_resonance
         btn_res.callback = self._handle_resonance
         btn_exchange.callback = self._handle_craft
 
@@ -160,64 +147,62 @@ class TrainScreenView(BaseCardRosterView):
         self.add_item(btn_back)
 
     async def update_screen(self, interaction: discord.Interaction):
-        self.user_cards[:] = await get_user_cards(self.user_id)
+        self.user_cards[:], self.inventory = await asyncio.gather(
+            get_user_cards(self.user_id),
+            get_inventory(self.user_id)
+        )
         self._setup_components()
 
         content, embed, attachments = await self._get_screen_payload()
         await interaction.response.edit_message(content=content, embed=embed, view=self, attachments=attachments)
 
     async def _handle_resonance(self, interaction: discord.Interaction):
-        if not self.selected_card_id:
-            return
-
-        filtered_cards = self.get_filtered_cards()
-        target_card = next((c for c in filtered_cards if c["id"] == self.selected_card_id), None)
-        rarity = target_card.get("rarity", "S3") if target_card else "S3"
+        target_card = self._get_target_card()
+        rarity = target_card["rarity"]
         res_drink_cost = COSTS.get(rarity, 1)
 
-        success = await increase_resonance(self.user_id, self.selected_card_id)
-        if not success:
+        if self.inventory.sports_drinks < res_drink_cost:
             await interaction.response.send_message(
                 f"❌ You need at least 🥤 **{res_drink_cost}** Sports Drinks to increase Resonance for this player!",
                 ephemeral=True
             )
             return
 
+        await increase_resonance(self.user_id, self.selected_card_id)
         await self.update_screen(interaction)
 
     async def _handle_train(self, interaction: discord.Interaction, levels: int = 1, max_mode: bool = False):
-        if not self.selected_card_id:
-            return
+        target_card = self._get_target_card()
+        current_lvl = target_card["level"]
+        rarity = target_card["rarity"]
 
-        success = await train_card(self.user_id, self.selected_card_id, levels, max_mode)
-        if not success:
+        cost_one_level = get_level_cost(current_lvl, 1, rarity)
+
+        if self.inventory.practice_balls < cost_one_level:
             await interaction.response.send_message(
                 "❌ You don't have enough 🏐 **Practice Balls** to train this player!",
                 ephemeral=True
             )
             return
 
+        await train_card(self.user_id, self.selected_card_id, levels, max_mode)
         await self.update_screen(interaction)
 
     async def _handle_craft(self, interaction: discord.Interaction):
-        success = await craft_drink(self.user_id)
-        if not success:
+        if self.inventory.drink_vouchers < CRAFT_VOUCHER_COST:
             await interaction.response.send_message(
                 f"❌ You need at least 🎟️ **{CRAFT_VOUCHER_COST}** Drink Vouchers to craft a Sports Drink!",
                 ephemeral=True
             )
             return
 
+        await craft_drink(self.user_id)
         await self.update_screen(interaction)
 
     async def _get_screen_payload(self) -> tuple[str, discord.Embed, list[discord.File]]:
         """Helper to build content, embed, and attachments for the training screen."""
         content = "🏋️ **Player Training**"
         embed = await self.build_embed()
-
-        filtered_cards = self.get_filtered_cards()
-        target_card = next((c for c in filtered_cards if c["id"] == self.selected_card_id), None)
-        image_file = get_card_image_file(target_card) if target_card else None
-        attachments = [image_file] if image_file else []
+        attachments = self._get_target_card_attachments()
 
         return content, embed, attachments

@@ -1,21 +1,19 @@
+import asyncio
 from collections import defaultdict
 from datetime import datetime, timezone
 import discord
 
-from ui.gacha import UserHomeView
-from ui.utils import create_card_embed, get_card_image_file, get_short_name, PositionFilterSelectMenu, CardSelectMenu, \
-    BaseCardRosterView
-from database import get_user_cards, get_lineups, clear_lineup, update_lineup_name, add_to_lineup, remove_pinch, CONFIG, \
-    CARDS_BY_ID, SPECIALTIES_BY_ID, BONDS_BY_ID, SYNERGIES_BY_ID
+from ui.utils import create_card_embed, get_short_name, PositionFilterSelectMenu, CardSelectMenu, BaseCardRosterView
+from data_loader import CARDS_BY_ID, SPECIALTIES_BY_ID, BONDS_BY_ID, SYNERGIES_BY_ID, TEAM_CONFIG
+from database import get_user_cards, get_lineups, clear_lineup, update_lineup_name, add_to_lineup, remove_pinch
 
 # Load team configurations
-TEAM_CONFIG = CONFIG.get("TEAM", {})
-MAX_LINEUPS = TEAM_CONFIG.get("max_lineups", 6)
-MIN_SYNERGY_PLAYERS = TEAM_CONFIG.get("min_synergy_players", 4)
+MAX_LINEUPS = TEAM_CONFIG["max_lineups"]
+MIN_SYNERGY_PLAYERS = TEAM_CONFIG["min_synergy_players"]
 
 STARTING_SLOTS = [
-    "libero", "setter", "middle_blocker_2", "wing_spiker_2",
-    "opposite", "middle_blocker_1", "wing_spiker_1"
+    "setter", "opposite", "wing_spiker_1", "wing_spiker_2",
+    "middle_blocker_1", "middle_blocker_2", "libero"
 ]
 
 ALL_SLOTS = [
@@ -49,7 +47,7 @@ class LineupSelectMenu(discord.ui.Select):
 class LineupRenameModal(discord.ui.Modal, title="Rename Lineup"):
     lineup_name = discord.ui.TextInput(
         label="New Lineup Name",
-        placeholder="Enter team name...",
+        placeholder="Enter lineup name...",
         max_length=32,
         required=True
     )
@@ -62,10 +60,7 @@ class LineupRenameModal(discord.ui.Modal, title="Rename Lineup"):
     async def on_submit(self, interaction: discord.Interaction):
         new_name = self.lineup_name.value
 
-        # Save to database
         await update_lineup_name(interaction.user.id, self.lineup_index, new_name)
-
-        # Refresh the screen to display the new name immediately
         await self.parent_view.update_screen(interaction)
 
 
@@ -81,8 +76,10 @@ class TeamScreenView(BaseCardRosterView):
 
     @classmethod
     async def create(cls, user_id: int, selected_card_id: str | None = None):
-        user_cards = await get_user_cards(user_id)
-        lineups = await get_lineups(user_id)
+        user_cards, lineups = await asyncio.gather(
+            get_user_cards(user_id),
+            get_lineups(user_id)
+        )
 
         view = cls(user_id, user_cards, selected_card_id, lineups)
 
@@ -188,14 +185,10 @@ class TeamScreenView(BaseCardRosterView):
 
     async def build_embed(self) -> discord.Embed:
         filtered_cards = self.get_filtered_cards()
+        target_card = self._get_target_card(filtered_cards)
 
-        target_card = next((c for c in filtered_cards if c["id"] == self.selected_card_id), filtered_cards[0])
         scaled_stats = target_card.get("scaled_stats", target_card.get("base_stats", {}))
-
-        embed = create_card_embed(
-            target_card,
-            extra_stats=scaled_stats,
-        )
+        embed = create_card_embed(target_card, extra_stats=scaled_stats)
 
         # Check player availability status (Trip or Exhaustion)
         is_on_trip, is_exhausted, exhausted_until = self._check_card_availability(target_card)
@@ -215,13 +208,13 @@ class TeamScreenView(BaseCardRosterView):
             )
 
         # Show the setter's specialty only if the card's position is Setter ('S')
-        if target_card.get("position") == "S":
-            spec_id = target_card.get("specialty_id")
+        if target_card["position"] == "S":
+            spec_id = target_card["specialty_id"]
             specialty = SPECIALTIES_BY_ID.get(spec_id) if spec_id else None
 
             if specialty:
-                name = specialty.get("name", "Unknown")
-                desc = specialty.get("description", "")
+                name = specialty["name"]
+                desc = specialty["description"]
 
                 embed.add_field(
                     name=f"🎯 Setter Specialty: {name}",
@@ -230,7 +223,7 @@ class TeamScreenView(BaseCardRosterView):
                 )
 
         # Show school bonds only if card rarity is S4 or S5
-        rarity = target_card.get("rarity", "S3")
+        rarity = target_card["rarity"]
         if rarity in ("S4", "S5") and BONDS_BY_ID:
             card_id = target_card.get("id")
             applicable_bonds = [
@@ -241,8 +234,8 @@ class TeamScreenView(BaseCardRosterView):
             if applicable_bonds:
                 bond_lines = []
                 for bond in applicable_bonds:
-                    b_name = bond.get("name", "Unknown")
-                    b_desc = bond.get("description", "")
+                    b_name = bond["name"]
+                    b_desc = bond["description"]
 
                     req_ids = bond.get("required_players", [])
                     req_names = [
@@ -262,20 +255,7 @@ class TeamScreenView(BaseCardRosterView):
         return embed
 
     def _setup_components(self):
-        self.clear_items()
-        if not self.user_cards:
-            return
-
-        filtered_cards = self.get_filtered_cards()
-        page_cards, max_pages = self.get_paged_cards(filtered_cards)
-
-        if page_cards:
-            if not self.selected_card_id or not any(c["id"] == self.selected_card_id for c in filtered_cards):
-                self.selected_card_id = page_cards[0]["id"]
-        else:
-            self.selected_card_id = None
-
-        page_info = f"(Page {self.current_page + 1}/{max_pages})" if max_pages > 1 else ""
+        filtered_cards, page_cards, max_pages, page_info = self._setup_pagination()
         lineup_names_map = {i: data.get("lineup_name", f"Lineup {i}") for i, data in self.lineups.items()}
 
         # Row 0: Lineup Selector
@@ -301,6 +281,7 @@ class TeamScreenView(BaseCardRosterView):
 
                 self.add_item(btn_confirm)
                 self.add_item(btn_cancel_clear)
+
             else:
                 # Check if the current lineup is completely empty
                 team_data = self.lineups.get(self.selected_lineup_index, {})
@@ -334,10 +315,11 @@ class TeamScreenView(BaseCardRosterView):
                 self.add_item(btn_prev)
                 self.add_item(btn_next)
                 self.add_item(btn_back)
+
         else:
             # Slot Selection Sub-Screen Buttons
-            target_card = next((c for c in self.user_cards if c["id"] == self.selected_card_id), None)
-            pos = target_card.get("position") if target_card else ""
+            target_card = self._get_target_card()
+            pos = target_card["position"]
 
             # Check availability state using the helper method
             is_on_trip, is_exhausted, _ = self._check_card_availability(target_card)
@@ -345,18 +327,10 @@ class TeamScreenView(BaseCardRosterView):
 
             # Row 3: Position specific slot buttons
             if pos in ("MB", "WS"):
-                btn_slot1 = discord.ui.Button(
-                    label=f"Add to {pos}1",
-                    style=discord.ButtonStyle.primary,
-                    emoji="1️⃣",
-                     row=3,
+                btn_slot1 = discord.ui.Button(label=f"Add to {pos}1", style=discord.ButtonStyle.primary, emoji="1️⃣", row=3,
                     disabled=is_unavailable
                 )
-                btn_slot2 = discord.ui.Button(
-                    label=f"Add to {pos}2",
-                    style=discord.ButtonStyle.primary,
-                    emoji="2️⃣",
-                    row=3,
+                btn_slot2 = discord.ui.Button(label=f"Add to {pos}2", style=discord.ButtonStyle.primary, emoji="2️⃣", row=3,
                     disabled=is_unavailable
                 )
 
@@ -366,16 +340,13 @@ class TeamScreenView(BaseCardRosterView):
 
                 self.add_item(btn_slot1)
                 self.add_item(btn_slot2)
+
             elif pos in ("L", "OP", "S"):
                 pos_map = {"L": "libero", "OP": "opposite", "S": "setter"}
                 pos_display = {"L": "Libero (L)", "OP": "Opposite Hitter (OP)", "S": "Setter (S)"}.get(pos, pos)
                 slot_name = pos_map.get(pos)
 
-                btn_slot = discord.ui.Button(
-                    label=f"Add to {pos_display}",
-                    style=discord.ButtonStyle.primary,
-                    emoji="📌",
-                    row=3,
+                btn_slot = discord.ui.Button(label=f"Add to {pos_display}", style=discord.ButtonStyle.primary, emoji="📌", row=3,
                     disabled=is_unavailable
                 )
                 btn_slot.callback = self._create_slot_callback(slot_name)
@@ -383,22 +354,16 @@ class TeamScreenView(BaseCardRosterView):
 
             # Check if a pinch server is assigned in the current lineup team_data
             team_data = self.lineups.get(self.selected_lineup_index, {})
-            has_pinch_server = bool(team_data.get("pinch_server"))
+            has_pinch_server = bool(team_data["pinch_server"])
 
             # Check if the selected card is a Libero (Liberos cannot serve)
-            is_libero = target_card and target_card.get("position") == "L"
+            is_libero = target_card and target_card["position"] == "L"
 
             # Row 4: Pinch Server management and Cancel
-            btn_pinch = discord.ui.Button(
-                label="Add Pinch",
-                style=discord.ButtonStyle.secondary,
-                 row=4,
+            btn_pinch = discord.ui.Button(label="Add Pinch", style=discord.ButtonStyle.secondary, row=4,
                 disabled=(is_libero or is_unavailable)
             )
-            btn_remove_pinch = discord.ui.Button(
-                label="Remove Pinch",
-                style=discord.ButtonStyle.danger,
-                 row=4,
+            btn_remove_pinch = discord.ui.Button(label="Remove Pinch", style=discord.ButtonStyle.danger, row=4,
                 disabled=not has_pinch_server
             )
             btn_remove_pinch.callback = self._handle_remove_pinch
@@ -412,17 +377,16 @@ class TeamScreenView(BaseCardRosterView):
             self.add_item(btn_cancel)
 
     async def update_screen(self, interaction: discord.Interaction):
-        self.user_cards[:] = await get_user_cards(self.user_id)
-        self.lineups = await get_lineups(self.user_id)
+        self.user_cards[:], self.lineups = await asyncio.gather(
+            get_user_cards(self.user_id),
+            get_lineups(self.user_id)
+        )
         self._setup_components()
 
         content, embed, attachments = await self._get_screen_payload()
         await interaction.response.edit_message(content=content, embed=embed, view=self, attachments=attachments)
 
     async def _handle_enter_slot_selection(self, interaction: discord.Interaction):
-        if not self.selected_card_id:
-            await interaction.response.send_message("No player selected!", ephemeral=True)
-            return
         self.is_slot_selection_mode = True
         self._setup_components()
 
@@ -437,9 +401,7 @@ class TeamScreenView(BaseCardRosterView):
         await interaction.response.edit_message(content=content, embed=embed, view=self, attachments=attachments)
 
     async def _handle_remove_pinch(self, interaction: discord.Interaction):
-        # Remove the pinch server from the database
         await remove_pinch(interaction.user.id, self.selected_lineup_index)
-        # Refresh the screen immediately to reflect the change
         await self.update_screen(interaction)
 
     async def _handle_rename_lineup(self, interaction: discord.Interaction):
@@ -464,7 +426,6 @@ class TeamScreenView(BaseCardRosterView):
 
     def _create_slot_callback(self, slot_name: str):
         """Helper factory to generate callbacks for any position/slot button."""
-
         async def callback(interaction: discord.Interaction):
             # Assign player to slot and clear duplicates in this lineup
             await add_to_lineup(interaction.user.id, self.selected_lineup_index, slot_name, self.selected_card_id)
@@ -478,24 +439,17 @@ class TeamScreenView(BaseCardRosterView):
     @staticmethod
     def _check_card_availability(card: dict | None) -> tuple[bool, bool, datetime | None]:
         """Checks if a card is currently on a trip or exhausted."""
-        if not card:
-            return False, False, None
-
         now = datetime.now(timezone.utc)
-        is_on_trip = card.get("is_on_trip", False)
-        exhausted_until = card.get("exhausted_until")
+        is_on_trip = card["is_on_trip"]
+        exhausted_until = card["exhausted_until"]
         is_exhausted = exhausted_until is not None and exhausted_until > now
 
         return is_on_trip, is_exhausted, exhausted_until
 
     async def _get_screen_payload(self) -> tuple[str, discord.Embed, list[discord.File]]:
-        """Helper to build content, embed, and attachments for the current view state."""
+        """Helper to build content, embed, and attachments for the team screen."""
         content = await self.build_content()
         embed = await self.build_embed()
-
-        filtered_cards = self.get_filtered_cards()
-        target_card = next((c for c in filtered_cards if c["id"] == self.selected_card_id), None)
-        image_file = get_card_image_file(target_card) if target_card else None
-        attachments = [image_file] if image_file else []
+        attachments = self._get_target_card_attachments()
 
         return content, embed, attachments

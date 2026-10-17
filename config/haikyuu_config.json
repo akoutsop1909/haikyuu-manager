@@ -92,7 +92,18 @@
     "max_players": 5,
     "max_duration_hours": 12,
     "milestone_interval_hours": 3,
-    "exhaustion_hours": 8
+    "exhaustion_hours": 8,
+    "max_duration_bonus_vouchers": 1,
+    "rewards_by_rarity": {
+      "S3": {
+        "scout_coins": 30,
+        "practice_balls": 150
+      },
+      "S4": {
+        "scout_coins": 50,
+        "practice_balls": 200
+      }
+    }
   },
   "ADMIN_PACK": {
     "scout_coins": 10000000,

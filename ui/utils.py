@@ -119,16 +119,16 @@ class BaseCardRosterView(discord.ui.View):
         self.selected_card_id = selected_card_id
         self.current_page = 0
 
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if interaction.user.id != self.user_id:
-            await interaction.response.send_message("This isn't your menu!", ephemeral=True)
-            return False
-        return True
-
     def get_filtered_cards(self) -> list[dict]:
         if self.selected_position == "ALL":
             return self.user_cards
         return [c for c in self.user_cards if c.get("position") == self.selected_position]
+
+    def _get_target_card(self, filtered_cards: list[dict] | None = None) -> dict | None:
+        """Helper to get the currently selected card from filtered results."""
+        if filtered_cards is None:
+            filtered_cards = self.get_filtered_cards()
+        return next((c for c in filtered_cards if c["id"] == self.selected_card_id), None)
 
     def get_paged_cards(self, filtered_cards: list[dict]) -> tuple[list[dict], int]:
         total_cards = len(filtered_cards)
@@ -138,6 +138,29 @@ class BaseCardRosterView(discord.ui.View):
         start_idx = self.current_page * self.PAGE_SIZE
         end_idx = start_idx + self.PAGE_SIZE
         return filtered_cards[start_idx:end_idx], max_pages
+
+    def _validate_and_sync_selection(self, page_cards: list[dict]):
+        """Ensures selected_card_id points to a valid card on the current page."""
+        if page_cards:
+            if not self.selected_card_id or not any(c["id"] == self.selected_card_id for c in page_cards):
+                self.selected_card_id = page_cards[0]["id"]
+        else:
+            self.selected_card_id = None
+
+    def _get_target_card_attachments(self) -> list[discord.File]:
+        """Helper to get image attachments for the currently selected card."""
+        target_card = self._get_target_card()
+        image_file = get_card_image_file(target_card) if target_card else None
+        return [image_file] if image_file else []
+
+    def _setup_pagination(self) -> tuple[list[dict], list[dict], int, str]:
+        """Clears items, filters cards, gets current page slice, syncs selection, and builds page info."""
+        self.clear_items()
+        filtered_cards = self.get_filtered_cards()
+        page_cards, max_pages = self.get_paged_cards(filtered_cards)
+        self._validate_and_sync_selection(page_cards)
+        page_info = f"(Page {self.current_page + 1}/{max_pages})" if max_pages > 1 else ""
+        return filtered_cards, page_cards, max_pages, page_info
 
     async def _handle_prev_page(self, interaction: discord.Interaction):
         if self.current_page > 0:
@@ -196,10 +219,6 @@ class PositionFilterSelectMenu(discord.ui.Select):
                     )
                 )
 
-        # Fallback if no options are available
-        if len(options) == 1 and not user_cards:
-            options = [discord.SelectOption(label="No positions available", value="none")]
-
         super().__init__(placeholder="Filter by Position...", min_values=1, max_values=1, options=options, row=row)
 
     async def callback(self, interaction: discord.Interaction):
@@ -228,14 +247,6 @@ class CardSelectMenu(discord.ui.Select):
                     description=f"{card['rarity']} | {res_str} | Pos: {card['position']} | {card['school']}",
                     value=card["id"],
                     default=is_default
-                )
-            )
-
-        if not options:
-            options.append(
-                discord.SelectOption(
-                    label="No available players",
-                    value="none"
                 )
             )
 

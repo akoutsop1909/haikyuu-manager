@@ -1,17 +1,14 @@
-from pathlib import Path
-
 import discord
 
 from ui.gacha import UserHomeView
 from ui.utils import create_card_embed, get_card_image_file, get_banner_file, format_resonance_stars, format_number
-from database import get_inventory, perform_scout, SCOUT_CONFIG
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-ASSETS_DIR = PROJECT_ROOT / "assets"
+from data_loader import SCOUT_CONFIG
+from database import get_inventory, perform_scout
 
 # Load scout configurations
 COST_PER_PULL = SCOUT_CONFIG["cost_per_pull"]
 WEIGHTS = SCOUT_CONFIG["rarity_weights"]
+TOTAL_WEIGHT = sum(WEIGHTS.values()) or 1
 
 def attach_scout_status_field(embed: discord.Embed, card_data: dict):
     """Helper to append gacha pull status to a card embed."""
@@ -46,9 +43,10 @@ def build_card_result_payload(card_data: dict, scout_coins: int) -> tuple[discor
         return embed, attachments
 
 class ScoutSelectMenu(discord.ui.Select):
-    def __init__(self, pulled_cards: list, summary_embed: discord.Embed):
+    def __init__(self, pulled_cards: list, summary_embed: discord.Embed, balance: int):
         self.pulled_cards = pulled_cards
         self.summary_embed = summary_embed
+        self.balance = balance
 
         options = [
             discord.SelectOption(
@@ -83,13 +81,8 @@ class ScoutSelectMenu(discord.ui.Select):
         selected_idx = int(val)
         card_data = self.pulled_cards[selected_idx]
 
-        # Get current scout coins from inventory if needed, or pass it along
-        inventory = await get_inventory(interaction.user.id)
-        embed, attachments = build_card_result_payload(card_data, inventory.scout_coins)
-
-        await interaction.response.edit_message(
-            embed=embed, attachments=attachments, view=self.view
-        )
+        embed, attachments = build_card_result_payload(card_data, self.balance)
+        await interaction.response.edit_message(embed=embed, attachments=attachments, view=self.view)
 
 class ScoutScreenView(discord.ui.View):
 
@@ -104,9 +97,8 @@ class ScoutScreenView(discord.ui.View):
 
         cost_10x = COST_PER_PULL * 10
 
-        total = sum(WEIGHTS.values()) or 1
         rates_str = " • ".join(
-            [f"{rarity}: {weight / total * 100:.0f}%" for rarity, weight in WEIGHTS.items()]
+            [f"{rarity}: {weight / TOTAL_WEIGHT * 100:.0f}%" for rarity, weight in WEIGHTS.items()]
         )
 
         banner_file = get_banner_file("scout")
@@ -142,29 +134,24 @@ class ScoutScreenView(discord.ui.View):
     @discord.ui.button(label="Back", style=discord.ButtonStyle.secondary, emoji="⬅️", row=2)
     async def back(self, interaction: discord.Interaction, _button: discord.ui.Button):
         embed = await UserHomeView.build_embed(interaction)
-        await interaction.response.edit_message(
-            embed=embed, view=UserHomeView(self.user_id), attachments=[]
-        )
+        await interaction.response.edit_message(embed=embed, view=UserHomeView(self.user_id), attachments=[])
 
     async def _handle_scout(self, interaction: discord.Interaction, count: int):
-        pulled_cards = await perform_scout(interaction.user.id, count)
+        cost = count * COST_PER_PULL
         inventory = await get_inventory(interaction.user.id)
 
-        self._cleanup_dropdown()
-
-        # An empty list indicates insufficient funds or failed transaction
-        if not pulled_cards:
-            cost = count * COST_PER_PULL
+        if inventory.scout_coins < cost:
+            self._cleanup_dropdown()
             banner_file = get_banner_file("scout_fail")
 
             embed = discord.Embed(
                 title="❌ Scout Failed",
                 description=(
                     f"You don't have enough Scout Coins!\n\n"
-                    f"• Required: 🪙 **{format_number(cost)}**\n"
-                    f"• Your Balance: 🪙 **{format_number(inventory.scout_coins)}**"
+                    f"• Required: 🪙 **{cost}**\n"
+                    f"• Your Balance: 🪙 **{inventory.scout_coins}**"
                 ),
-                color=discord.Color.red(),
+                color=discord.Color.gold(),
             )
 
             if banner_file:
@@ -172,18 +159,28 @@ class ScoutScreenView(discord.ui.View):
 
             attachments = [banner_file] if banner_file else []
 
-            await interaction.response.edit_message(
-                embed=embed, view=self, attachments=attachments
+            await interaction.response.edit_message(embed=embed, view=self, attachments=attachments)
+            return
+
+        pulled_cards = await perform_scout(interaction.user.id, count)
+
+        # Safety check for unexpected empty results
+        if not pulled_cards:
+            await interaction.response.send_message(
+                "❌ An error occurred while processing your scout. Please try again.",
+                ephemeral=True
             )
             return
 
+        new_balance = inventory.scout_coins - cost
+
+        self._cleanup_dropdown()
+
         if count == 1:
             card_data = pulled_cards[0]
-            embed, attachments = build_card_result_payload(card_data, inventory.scout_coins)
+            embed, attachments = build_card_result_payload(card_data, new_balance)
 
-            await interaction.response.edit_message(
-                embed=embed, view=self, attachments=attachments
-            )
+            await interaction.response.edit_message(embed=embed, view=self, attachments=attachments)
         else:
             results_formatted = []
             for idx, c in enumerate(pulled_cards, 1):
@@ -195,22 +192,19 @@ class ScoutScreenView(discord.ui.View):
                 elif c["status"] == "OVERFLOW":
                     status_tag = f" `+{c['drink_vouchers']}🎟️`"
 
-                # Compact single line formatting for mobile screen bounds
                 line = f"`{idx:02d}.` **[{c['position']}]** {c['name']} *({c['rarity']})*{status_tag}"
                 results_formatted.append(line)
 
             description_text = "\n".join(results_formatted)
 
             embed = discord.Embed(
-                title="🏐 Scout Results (10x Pull)",
-                description=description_text
-                + "\n\n👇 Select a player from the dropdown below to view his details!",
-                color=discord.Color.orange(),
+                title="🔍 Scout Results (10x Pull)",
+                description=description_text +
+                            "\n\n👇 Select a player from the dropdown below to view his details!",
+                color=discord.Color.gold(),
             )
-            embed.set_footer(text=f"Balance: 🪙 {format_number(inventory.scout_coins)}")
+            embed.set_footer(text=f"Balance: 🪙 {format_number(new_balance)}")
 
-            self.dropdown = ScoutSelectMenu(pulled_cards, summary_embed=embed)
+            self.dropdown = ScoutSelectMenu(pulled_cards, summary_embed=embed, balance=new_balance)
             self.add_item(self.dropdown)
-            await interaction.response.edit_message(
-                embed=embed, view=self, attachments=[]
-            )
+            await interaction.response.edit_message(embed=embed, view=self, attachments=[])

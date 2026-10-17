@@ -9,6 +9,7 @@ from ui.admin import AdminHomeView
 
 logger = logging.getLogger(__name__)
 
+
 class Admin(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -19,7 +20,10 @@ class Admin(commands.Cog):
             raise SystemExit(1)
 
         # State tracking
-        self.has_run_startup = False  # Prevents duplicate catch-up execution on gateway reconnects
+        self.has_run_startup = False
+
+        # Track active admin panels per user: {user_id: discord.Message}
+        self.active_panels: dict[int, discord.Message] = {}
 
     @property
     def admin_channel(self) -> discord.TextChannel | None:
@@ -30,7 +34,6 @@ class Admin(commands.Cog):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         """Enforces admin permissions and limits commands to the designated admin channel."""
-        # Prevent execution before initialize_admin finishes running
         if not self.bot.is_ready() or not self.has_run_startup:
             await interaction.response.send_message(
                 "⏳ Bot is currently starting up! Please try again in a few seconds.",
@@ -63,8 +66,29 @@ class Admin(commands.Cog):
     @app_commands.command(name="admin", description="Debug tools for server administrators.")
     @app_commands.default_permissions(administrator=True)
     async def admin(self, interaction: discord.Interaction):
+        user_id = interaction.user.id
+
+        # 1. Disable the old admin panel if it exists
+        if user_id in self.active_panels:
+            old_message = self.active_panels[user_id]
+            try:
+                view = discord.ui.View.from_message(old_message)
+                for child in view.children:
+                    child.disabled = True
+                await old_message.edit(view=view)
+            except (discord.HTTPException, discord.NotFound):
+                pass
+
+        # 2. Defer and send the new panel
         await interaction.response.defer(ephemeral=True)
         await AdminHomeView.send_panel(interaction)
+
+        # 3. Save reference to the new admin panel message
+        try:
+            new_message = await interaction.original_response()
+            self.active_panels[user_id] = new_message
+        except discord.HTTPException:
+            pass
 
     async def initialize_admin(self):
         await self.bot.wait_until_ready()
@@ -84,6 +108,7 @@ class Admin(commands.Cog):
             raise SystemExit(1)
 
         self.has_run_startup = True
+
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Admin(bot))

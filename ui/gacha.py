@@ -1,7 +1,8 @@
 import discord
 
 from ui.utils import format_number, get_banner_file
-from database import register_user, claim_daily, claim_birthday, get_inventory, get_user_cards, CARDS_BY_ID, STARTER_PACK
+from data_loader import CARDS_BY_ID, STARTER_PACK
+from database import register_user, claim_daily, claim_birthday, get_inventory
 
 
 class UserHomeView(discord.ui.View):

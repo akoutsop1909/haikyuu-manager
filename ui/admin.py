@@ -1,7 +1,8 @@
 import discord
 
-from database import boost_admin_account, grant_all_cards, user_exists, delete_user, ADMIN_PACK
 from ui.utils import format_number
+from data_loader import ADMIN_PACK
+from database import boost_admin_account, grant_all_cards, user_exists, delete_user
 
 
 def format_pack_resources() -> str:
