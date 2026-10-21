@@ -1,0 +1,24 @@
+# Environment variables (SECRETS - NEVER COMMIT)
+.env
+
+# Python bytecode cache
+__pycache__/
+*.pyc
+
+# Virtual environments
+venv/
+.venv/
+
+# IDE settings
+.idea/
+.vscode/
+
+# OS generated files
+.DS_Store
+
+# Log files and directory
+logs/
+*.log
+
+# Assets directory
+assets/
