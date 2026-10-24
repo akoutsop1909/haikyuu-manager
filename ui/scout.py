@@ -2,8 +2,8 @@ import discord
 
 from ui.gacha import UserHomeView
 from ui.utils import lock_view_ui, create_card_embed, get_card_image_file, get_banner_file, format_resonance_stars, \
-    format_number
-from data_loader import SCOUT_CONFIG
+    format_resonance_badge, format_number
+from engine.data_loader import SCOUT_CONFIG
 from database import get_inventory, perform_scout
 
 # Load scout configurations
@@ -93,8 +93,8 @@ class ScoutScreenView(discord.ui.View):
     def _setup_components(self):
         self.clear_items()
 
-        # Row 0: Dropdown Menu (only if 10x scout results are active and we aren't showing a single card payload)
-        if self.pulled_cards and self.summary_embed and not self.selected_card_data:
+        # Row 0: Dropdown Menu (stays active as long as 10x scout results exist)
+        if self.pulled_cards and self.summary_embed:
             self.dropdown = ScoutSelectMenu(self.pulled_cards, self.summary_embed, self.balance)
             self.add_item(self.dropdown)
 
@@ -207,7 +207,8 @@ class ScoutScreenView(discord.ui.View):
                 if c["status"] == "NEW":
                     status_tag = " `NEW`"
                 elif c["status"] == "DUPLICATE":
-                    status_tag = f" `R{c['new_resonance']}`"
+                    res_str = format_resonance_badge(c.get('new_resonance', 0))
+                    status_tag = f" `{res_str}`"
                 elif c["status"] == "OVERFLOW":
                     status_tag = f" `+{c['drink_vouchers']}🎟️`"
 

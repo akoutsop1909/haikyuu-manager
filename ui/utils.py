@@ -1,16 +1,21 @@
+from collections import defaultdict
 from pathlib import Path
 import discord
+from engine.data_loader import CARDS_BY_ID, SPECIALTIES_BY_ID, BONDS_BY_ID, SYNERGIES_BY_ID, TEAM_CONFIG, STARTING_SLOTS
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 ASSETS_DIR = PROJECT_ROOT / "assets"
 
-RARITY_EMOJIS = {"S3": "🔵", "S4": "🟣", "S5": "🟡"}
+RARITY_EMOJIS = {"R": "🔵", "SR": "🟣", "SSR": "🟡"}
 
 # Global path cache to make card image lookups instant across all views
 CARD_PATH_CACHE: dict[str, Path | None] = {}
 
+MAX_LINEUPS = TEAM_CONFIG["max_lineups"]
+MIN_SYNERGY_PLAYERS = TEAM_CONFIG["min_synergy_players"]
+
 # ==============================================================================
-# 1. GENERAL UTILITY FUNCTIONS
+# 1. DISCORD UI & GENERAL HELPERS
 # ==============================================================================
 async def lock_view_ui(view: discord.ui.View, interaction: discord.Interaction):
     """Disables only the buttons on the view and immediately edits the message to prevent race conditions."""
@@ -30,13 +35,28 @@ def format_number(val: int) -> str:
         return f"{val / 1_000:.1f}K".replace(".0K", "K")
     return f"{val:,}"
 
-def get_short_name(full_name: str) -> str:
+def get_short_name(full_name: str | None) -> str:
     """Formats full player name into 'F. LastName' (e.g., 'Tobio Kageyama' -> 'T. Kageyama')."""
+    if not full_name:
+        return "Unknown"
     parts = full_name.split()
     if len(parts) > 1:
         return f"{parts[0][0]}. {' '.join(parts[1:])}"
     return full_name
 
+def format_resonance_stars(resonance_level: int, max_resonance: int = 5) -> str:
+    """Formats integer resonance into star icons: ★★★☆☆ """
+    filled_stars = "★" * resonance_level
+    empty_stars = "☆" * (max_resonance - resonance_level)
+    return f"{filled_stars}{empty_stars}"
+
+def format_resonance_badge(resonance: int) -> str:
+    """Formats resonance into a compact badge string like ★1 or ★0."""
+    return f"★{resonance}" if resonance > 0 else "★0"
+
+# ==============================================================================
+# 2. ASSET & FILE HELPERS
+# ==============================================================================
 def get_banner_file(banner_name: str, category: str = "banners") -> discord.File | None:
     banner_dir = ASSETS_DIR / "gacha" / category
     if path := next(banner_dir.glob(f"{banner_name}.*"), None):
@@ -62,11 +82,101 @@ def get_card_image_file(card_data: dict) -> discord.File | None:
         return discord.File(cached_path, filename=cached_path.name)
     return None
 
-def format_resonance_stars(resonance_level: int, max_resonance: int = 5) -> str:
-    """Formats integer resonance into star icons: ★★★☆☆ """
-    filled_stars = "★" * resonance_level
-    empty_stars = "☆" * (max_resonance - resonance_level)
-    return f"{filled_stars}{empty_stars}"
+# ==============================================================================
+# 3. EMBED & COURT DISPLAY BUILDERS
+# ==============================================================================
+def format_lineup_court_display(lineup_data: dict, user_cards: list[dict], lineup_index: int = 1) -> dict:
+    """Builds the ASCII court layout, active bonds/synergies summary, and total power for a lineup."""
+    lineup_name = lineup_data.get("lineup_name", f"Lineup {lineup_index}")
+    card_lookup = {c["id"]: c for c in user_cards}
+
+    team_power = 0
+    starting_card_ids = set()
+    school_counts = defaultdict(int)
+
+    for slot in STARTING_SLOTS:
+        cid = lineup_data.get(slot)
+        if cid and cid in card_lookup:
+            starting_card_ids.add(cid)
+            card = card_lookup[cid]
+            stats = card.get("scaled_stats", card.get("base_stats", {}))
+            team_power += sum(stats.values())
+            school_counts[card["school"]] += 1
+
+    # Setter Specialty & Bonds check
+    setter_cid = lineup_data.get("setter")
+    setter_card = CARDS_BY_ID.get(setter_cid) if setter_cid else None
+    spec_id = setter_card["specialty_id"] if setter_card else None
+    active_specialty_name = SPECIALTIES_BY_ID[spec_id]["name"] if spec_id else None
+
+    active_bonds_count = 0
+    for bond in BONDS_BY_ID.values():
+        req_players = set(bond.get("required_players", []))
+        if req_players and req_players.issubset(starting_card_ids):
+            active_bonds_count += 1
+
+    meta_parts = [f"Power: {team_power:,}"]
+    if active_specialty_name:
+        meta_parts.append(active_specialty_name)
+    if active_bonds_count > 0:
+        meta_parts.append(f"{active_bonds_count} Bond{'s' if active_bonds_count > 1 else ''}")
+
+    summary_str = " • ".join(meta_parts)
+
+    # Synergy check
+    active_synergy_line = None
+    has_active_synergy = False
+    for school, count in school_counts.items():
+        if count >= MIN_SYNERGY_PLAYERS:
+            has_active_synergy = True
+
+            matched_synergy = next(
+                (s for s in SYNERGIES_BY_ID.values() if s.get("school", "").lower() == school.lower()),
+                None
+            )
+            syn_desc = matched_synergy.get("description", "Active Synergy") if matched_synergy else "Active Synergy"
+            active_synergy_line = f"*🏫 Synergy ({school})*\n*{syn_desc}*"
+            break
+
+    if not active_synergy_line:
+        active_synergy_line = f"*🏫 Synergy (None)*\n*Needs at least {MIN_SYNERGY_PLAYERS} starter players of the same school*"
+
+    def get_slot_short(key: str) -> str:
+        card_id = lineup_data.get(key)
+        if card_id and card_id in CARDS_BY_ID:
+            return get_short_name(CARDS_BY_ID[card_id]["name"])
+        return "*Empty*"
+
+    s = get_slot_short("setter")
+    op = get_slot_short("opposite")
+    mb1 = get_slot_short("middle_blocker_1")
+    mb2 = get_slot_short("middle_blocker_2")
+    ws1 = get_slot_short("wing_spiker_1")
+    ws2 = get_slot_short("wing_spiker_2")
+    l = get_slot_short("libero")
+    ps = get_slot_short("pinch_server")
+
+    content = (
+        f"### 🎽 {lineup_name}\n"
+        f"*{summary_str}*\n"
+        f"\n"
+        f"{active_synergy_line}\n"
+        f"```text\n"
+        f"{'[L]':<13} {'[Pinch Server]'}\n"
+        f"{l:<13} {ps}\n\n"
+        f"{'[S]':<13} {'[MB2]':<13} {'[WS2]'}\n"
+        f"{s:<13} {mb2:<13} {ws2}\n\n"
+        f"{'[WS1]':<13} {'[MB1]':<13} {'[OP]'}\n"
+        f"{ws1:<13} {mb1:<13} {op}\n"
+        f"```"
+    )
+
+    return {
+        "content": content,
+        "team_power": team_power,
+        "active_bonds_count": active_bonds_count,
+        "has_active_synergy": has_active_synergy
+    }
 
 def create_card_embed(
     card_data: dict,
@@ -75,7 +185,7 @@ def create_card_embed(
     show_level_info: bool = True
 ) -> discord.Embed:
     color_val = int(card_data.get("embed_color", "0xFF6600"), 16)
-    rarity = card_data.get("rarity", "S3")
+    rarity = card_data.get("rarity", "R")
     name = card_data.get("name", "Unknown Player")
     quote = card_data.get("quote", "")
 
@@ -123,9 +233,87 @@ def create_card_embed(
 
     return embed
 
+def add_card_metadata_fields(
+    embed: discord.Embed,
+    target_card: dict,
+    active_lineup_card_ids: set[str] | None = None
+) -> discord.Embed:
+    """Appends setter specialty and school bonds to a card embed if applicable."""
+    if not target_card:
+        return embed
+
+    # Show the setter's specialty only if the card's position is Setter ('S')
+    if target_card.get("position") == "S":
+        spec_id = target_card.get("specialty_id")
+        specialty = SPECIALTIES_BY_ID.get(spec_id) if spec_id else None
+
+        if specialty:
+            embed.add_field(
+                name=f"🎯 Setter Specialty: {specialty['name']}",
+                value=specialty["description"],
+                inline=False
+            )
+
+    # Show school bonds only if card rarity is SR or SSR
+    if target_card.get("rarity") in ("SR", "SSR"):
+        card_id = target_card.get("id")
+        card_bonds = [
+            bond for bond in BONDS_BY_ID.values()
+            if card_id in bond.get("required_players", [])
+        ]
+
+        is_match_mode = active_lineup_card_ids is not None
+        title = "🤝 Active Bonds" if is_match_mode else "🤝 Bonds"
+
+        applicable_bonds = (
+            [b for b in card_bonds if set(b.get("required_players", [])).issubset(active_lineup_card_ids)]
+            if is_match_mode else card_bonds
+        )
+
+        if applicable_bonds:
+            bond_lines = []
+            for bond in applicable_bonds:
+                req_ids = bond.get("required_players", [])
+                req_names = [
+                    get_short_name(CARDS_BY_ID.get(rid, {}).get("name"))
+                    for rid in req_ids if rid != card_id and rid in CARDS_BY_ID
+                ]
+                req_str = f"with {' + '.join(req_names)}" if req_names else ""
+                bond_lines.append(f"• **{bond['name']}** *({req_str})*\n  {bond['description']}")
+
+            embed.add_field(name=title, value="\n".join(bond_lines), inline=False)
+        else:
+            embed.add_field(name=title, value="*No active bonds in this lineup.*", inline=False)
+
+    return embed
+
 # ==============================================================================
-# 2. REUSABLE UI VIEWS & MENUS
+# 4. REUSABLE UI COMPONENTS & BASE VIEWS
 # ==============================================================================
+class LineupSelectMenu(discord.ui.Select):
+    def __init__(self, current_lineup: int = 1, lineup_names: dict[int, str] = None):
+        lineup_names = lineup_names or {}
+        options = []
+
+        for i in range(1, MAX_LINEUPS + 1):
+            name = lineup_names.get(i, f"Lineup {i}")
+            options.append(
+                discord.SelectOption(
+                    label=name,
+                    value=str(i),
+                    default=(current_lineup == i),
+                    emoji="🎽"
+                )
+            )
+
+        super().__init__(placeholder="Select Lineup...", min_values=1, max_values=1, options=options, row=0)
+
+    async def callback(self, interaction: discord.Interaction):
+        await lock_view_ui(self.view, interaction)
+        self.view.selected_lineup_index = int(self.values[0])
+        await self.view.update_screen(interaction)
+
+
 class BaseCardRosterView(discord.ui.View):
     PAGE_SIZE = 25
 
@@ -180,28 +368,25 @@ class BaseCardRosterView(discord.ui.View):
         page_info = f"(Page {self.current_page + 1}/{max_pages})" if max_pages > 1 else ""
         return filtered_cards, page_cards, max_pages, page_info
 
-    async def _handle_prev_page(self, interaction: discord.Interaction):
-        if self.current_page > 0:
-            await lock_view_ui(self, interaction)
-
-            self.current_page -= 1
-            filtered_cards = self.get_filtered_cards()
-            page_cards, _ = self.get_paged_cards(filtered_cards)
-            if page_cards:
-                self.selected_card_id = page_cards[0]["id"]
-            await self.update_screen(interaction)
-
-    async def _handle_next_page(self, interaction: discord.Interaction):
+    async def _navigate_page(self, interaction: discord.Interaction, direction: int):
+        """Helper to handle page switching forward (+1) or backward (-1)."""
         filtered_cards = self.get_filtered_cards()
         _, max_pages = self.get_paged_cards(filtered_cards)
-        if self.current_page < max_pages - 1:
-            await lock_view_ui(self, interaction)
+        new_page = self.current_page + direction
 
-            self.current_page += 1
+        if 0 <= new_page < max_pages:
+            await lock_view_ui(self, interaction)
+            self.current_page = new_page
             page_cards, _ = self.get_paged_cards(filtered_cards)
             if page_cards:
                 self.selected_card_id = page_cards[0]["id"]
             await self.update_screen(interaction)
+
+    async def _handle_prev_page(self, interaction: discord.Interaction):
+        await self._navigate_page(interaction, -1)
+
+    async def _handle_next_page(self, interaction: discord.Interaction):
+        await self._navigate_page(interaction, 1)
 
     async def _handle_back(self, interaction: discord.Interaction):
         from ui.gacha import UserHomeView
@@ -260,8 +445,7 @@ class CardSelectMenu(discord.ui.Select):
         options = []
         for card in page_cards:
             is_default = (card["id"] == selected_card_id)
-            resonance = card["resonance"]
-            res_str = f"★{resonance}" if resonance > 0 else "★0"
+            res_str = format_resonance_badge(card["resonance"])
 
             options.append(
                 discord.SelectOption(
@@ -269,6 +453,16 @@ class CardSelectMenu(discord.ui.Select):
                     description=f"{card['rarity']} | {res_str} | Pos: {card['position']} | {card['school']}",
                     value=card["id"],
                     default=is_default
+                )
+            )
+
+        # Fallback dummy option if there are no cards to prevent Discord API 400 errors when disabled
+        if not options:
+            options.append(
+                discord.SelectOption(
+                    label="No players available",
+                    value="NONE",
+                    default=True
                 )
             )
 

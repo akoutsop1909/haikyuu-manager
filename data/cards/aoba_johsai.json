@@ -1,15 +1,15 @@
 [
   {
-    "id": "s_oikawa_s5",
+    "id": "s_oikawa_ssr",
     "name": "Tōru Oikawa",
     "school": "Aoba Johsai",
     "position": "S",
-    "rarity": "S5",
-    "specialty_id": "precision_set",
+    "rarity": "SSR",
+    "specialty_id": "service_cannon",
     "birthday": "07-20",
     "embed_color": "0x1B9AAA",
     "quote": "Talent is something you make bloom, instinct is something you polish!",
-    "image_file": "s_oikawa_s5.jpg",
+    "image_file": "s_oikawa_ssr.jpg",
     "base_stats": {
       "spike": 180,
       "block": 150,
@@ -19,15 +19,15 @@
     }
   },
   {
-    "id": "ws_iwaizumi_s5",
+    "id": "ws_iwaizumi_ssr",
     "name": "Hajime Iwaizumi",
     "school": "Aoba Johsai",
     "position": "WS",
-    "rarity": "S5",
+    "rarity": "SSR",
     "birthday": "06-10",
     "embed_color": "0x1B9AAA",
     "quote": "A team with six strong players is stronger!",
-    "image_file": "ws_iwaizumi_s5.jpg",
+    "image_file": "ws_iwaizumi_ssr.jpg",
     "base_stats": {
       "spike": 285,
       "block": 150,
@@ -37,15 +37,15 @@
     }
   },
   {
-    "id": "mb_matsukawa_s4",
+    "id": "mb_matsukawa_sr",
     "name": "Issei Matsukawa",
     "school": "Aoba Johsai",
     "position": "MB",
-    "rarity": "S4",
+    "rarity": "SR",
     "birthday": "03-01",
     "embed_color": "0x1B9AAA",
     "quote": "No matter how impressive your quick attack is, if it gets narrowed down, it isn't scary.",
-    "image_file": "mb_matsukawa_s4.jpg",
+    "image_file": "mb_matsukawa_sr.jpg",
     "base_stats": {
       "spike": 170,
       "block": 250,
@@ -55,15 +55,15 @@
     }
   },
   {
-    "id": "ws_hanamaki_s4",
+    "id": "ws_hanamaki_sr",
     "name": "Takahiro Hanamaki",
     "school": "Aoba Johsai",
     "position": "WS",
-    "rarity": "S4",
+    "rarity": "SR",
     "birthday": "01-27",
     "embed_color": "0x1B9AAA",
     "quote": "Don't worry, Oikawa! I'll cover the set!",
-    "image_file": "ws_hanamaki_s4.jpg",
+    "image_file": "ws_hanamaki_sr.jpg",
     "base_stats": {
       "spike": 200,
       "block": 135,
@@ -73,15 +73,15 @@
     }
   },
   {
-    "id": "mb_kindaichi_s4",
+    "id": "mb_kindaichi_sr",
     "name": "Yūtarō Kindaichi",
     "school": "Aoba Johsai",
     "position": "MB",
-    "rarity": "S4",
+    "rarity": "SR",
     "birthday": "06-06",
     "embed_color": "0x1B9AAA",
     "quote": "I'll spike any set Oikawa sends my way!",
-    "image_file": "mb_kindaichi_s4.jpg",
+    "image_file": "mb_kindaichi_sr.jpg",
     "base_stats": {
       "spike": 235,
       "block": 210,
@@ -91,15 +91,15 @@
     }
   },
   {
-    "id": "op_kyotani_s4",
+    "id": "op_kyotani_sr",
     "name": "Kentarō Kyōtani",
     "school": "Aoba Johsai",
     "position": "OP",
-    "rarity": "S4",
+    "rarity": "SR",
     "birthday": "12-07",
     "embed_color": "0x1B9AAA",
     "quote": "Get out of my way! I'm hitting it!",
-    "image_file": "op_kyotani_s4.jpg",
+    "image_file": "op_kyotani_sr.jpg",
     "base_stats": {
       "spike": 285,
       "block": 110,
@@ -109,15 +109,15 @@
     }
   },
   {
-    "id": "l_watari_s4",
+    "id": "l_watari_sr",
     "name": "Shinji Watari",
     "school": "Aoba Johsai",
     "position": "L",
-    "rarity": "S4",
+    "rarity": "SR",
     "birthday": "04-03",
     "embed_color": "0x1B9AAA",
     "quote": "As a former setter, I'll set up the backline attack if needed!",
-    "image_file": "l_watari_s4.jpg",
+    "image_file": "l_watari_sr.jpg",
     "base_stats": {
       "spike": 0,
       "block": 0,
@@ -127,15 +127,15 @@
     }
   },
   {
-    "id": "op_kunimi_s3",
+    "id": "op_kunimi_r",
     "name": "Akira Kunimi",
     "school": "Aoba Johsai",
     "position": "OP",
-    "rarity": "S3",
+    "rarity": "SR",
     "birthday": "03-25",
     "embed_color": "0x1B9AAA",
     "quote": "Wasting energy in the early sets is inefficient.",
-    "image_file": "op_kunimi_s3.jpg",
+    "image_file": "op_kunimi_r.jpg",
     "base_stats": {
       "spike": 145,
       "block": 90,
@@ -145,16 +145,16 @@
     }
   },
   {
-    "id": "s_yahaba_s3",
+    "id": "s_yahaba_r",
     "name": "Shigeru Yahaba",
     "school": "Aoba Johsai",
     "position": "S",
-    "rarity": "S3",
-    "specialty_id": "precision_set",
+    "rarity": "R",
+    "specialty_id": "service_cannon",
     "birthday": "03-01",
     "embed_color": "0x1B9AAA",
     "quote": "Do you think you're the only one who cares about winning?!",
-    "image_file": "s_yahaba_s3.jpg",
+    "image_file": "s_yahaba_r.jpg",
     "base_stats": {
       "spike": 90,
       "block": 60,

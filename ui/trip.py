@@ -4,18 +4,18 @@ import discord
 
 from ui.utils import lock_view_ui, create_card_embed, get_card_image_file, get_banner_file, PositionFilterSelectMenu, \
     CardSelectMenu, BaseCardRosterView
-from game_logic import calculate_tokyo_trip_rewards
-from data_loader import TOKYO_TRIP_CONFIG, STARTING_SLOTS, ALL_SLOTS
+from engine.game_logic import calculate_tokyo_trip_rewards
+from engine.data_loader import TOKYO_TRIP_CONFIG, STARTING_SLOTS, ALL_SLOTS
 from database import get_user_cards, get_lineups, get_tokyo_trip_start, start_tokyo_trip, claim_tokyo_trip
 
 # Load Tokyo trip configurations
 TOKYO_TRIP_MIN_OWNED = TOKYO_TRIP_CONFIG["min_s3_s4_owned"]
 TOKYO_TRIP_MAX_PLAYERS = TOKYO_TRIP_CONFIG["max_players"]
-ALLOWED_RARITIES = tuple(TOKYO_TRIP_CONFIG.get("allowed_rarities", ["S3", "S4"]))
+ALLOWED_RARITIES = tuple(TOKYO_TRIP_CONFIG.get("allowed_rarities", ["R", "SR"]))
 RARITY_LABEL = "/".join(ALLOWED_RARITIES)
 REWARDS_CONFIG = TOKYO_TRIP_CONFIG.get("rewards_by_rarity", {})
-S3_R = REWARDS_CONFIG.get("S3", {"scout_coins": 30, "practice_balls": 150})
-S4_R = REWARDS_CONFIG.get("S4", {"scout_coins": 50, "practice_balls": 200})
+R_R = REWARDS_CONFIG.get("R", {"scout_coins": 30, "practice_balls": 150})
+SR_R = REWARDS_CONFIG.get("SR", {"scout_coins": 50, "practice_balls": 200})
 INTERVAL_HOURS = TOKYO_TRIP_CONFIG["milestone_interval_hours"]
 EXHAUSTION_HOURS = TOKYO_TRIP_CONFIG["exhaustion_hours"]
 MAX_DURATION_HOURS = TOKYO_TRIP_CONFIG["max_duration_hours"]
@@ -91,8 +91,8 @@ class TripScreenView(BaseCardRosterView):
         reward_preview = (
             f"\n\n**Trip Rules & Rewards:**\n"
             f"• Rewards per Rarity:\n"
-            f"  ▫️ S3: +{S3_R['scout_coins']} 🪙 | +{S3_R['practice_balls']} 🏐\n"
-            f"  ▫️ S4: +{S4_R['scout_coins']} 🪙 | +{S4_R['practice_balls']} 🏐\n"
+            f"  ▫️ R: +{R_R['scout_coins']} 🪙 | +{R_R['practice_balls']} 🏐\n"
+            f"  ▫️ SR: +{SR_R['scout_coins']} 🪙 | +{SR_R['practice_balls']} 🏐\n"
             f"• Rewards (every {INTERVAL_HOURS}h, max {max_milestones}): +{coins_per_milestone:,} 🪙 | +{balls_per_milestone:,} 🏐\n"
             f"• Max Duration Bonus ({MAX_DURATION_HOURS}h): +{MAX_DURATION_BONUS_VOUCHERS} 🎟️\n"
             f"• Exhaustion: {EXHAUSTION_HOURS}h upon claim\n"
@@ -101,6 +101,8 @@ class TripScreenView(BaseCardRosterView):
         return squad_str + reward_preview
 
     async def build_embed(self) -> discord.Embed:
+        banner_filename = "tokyo_trip.jpg"
+
         # State 1: Active Trip
         if self.is_active_trip:
             rewards = calculate_tokyo_trip_rewards(self.trip_start, self.user_cards)
@@ -109,22 +111,11 @@ class TripScreenView(BaseCardRosterView):
                 f"• {c['name']} ({c['rarity']})"
                 for c in self.user_cards
             ]
-            players_list_str = "\n".join(player_lines) if player_lines else "None"
-
-            next_milestone_val = (
-                f"<t:{rewards.next_milestone_ts}:R>"
-                if rewards.next_milestone_ts else "Max milestones reached!"
-            )
-
-            voucher_val = (
-                f"<t:{rewards.max_duration_ts}:R>"
-                if rewards.max_duration_ts else "Ready to claim!"
-            )
+            players_list_str = "\n".join(player_lines)
 
             embed = discord.Embed(
                 title="🚌 Tokyo Training Camp - Active Squad",
-                description="Your squad is currently training hard in Tokyo!",
-                color=discord.Color.teal()
+                description="Your squad is currently training hard in Tokyo!"
             )
             embed.add_field(
                 name=f"Active Members ({len(self.user_cards)}/{TOKYO_TRIP_MAX_PLAYERS})",
@@ -132,74 +123,69 @@ class TripScreenView(BaseCardRosterView):
                 inline=False
             )
 
-            # Left Column: Progress & Countdown
-            progress_value = (
-                f"Milestones: {rewards.current_milestones}/{rewards.max_milestones}\n"
-                f"Next milestone: {next_milestone_val}\n"
-                f"Next gain: +{rewards.coins_per_milestone:,} 🪙 | +{rewards.balls_per_milestone:,} 🏐"
-            )
-            embed.add_field(
-                name="Progress",
-                value=progress_value,
-                inline=True
-            )
+            # Check if max duration has been reached
+            is_max_duration = rewards.max_duration_ts is None
+            voucher_suffix = "Drink Voucher" if MAX_DURATION_BONUS_VOUCHERS == 1 else "Drink Vouchers"
 
-            voucher_label = (
-                f"+{MAX_DURATION_BONUS_VOUCHERS} Voucher"
-                if MAX_DURATION_BONUS_VOUCHERS == 1
-                else f"+{MAX_DURATION_BONUS_VOUCHERS} Vouchers"
-            )
+            if is_max_duration:
+                progress_value = "Trip complete! Rewards are ready to claim."
+                rewards_value = (
+                    f"🪙 **{rewards.scout_coins:,}** Scout Coins\n"
+                    f"🏐 **{rewards.practice_balls:,}** Practice Balls\n"
+                    f"🎟️ **{MAX_DURATION_BONUS_VOUCHERS}** {voucher_suffix}"
+                )
+                banner_filename = "tokyo_trip_complete.webp"
+            else:
+                progress_value = (
+                    f"Milestones: {rewards.current_milestones}/{rewards.max_milestones}\n"
+                    f"Next milestone: <t:{rewards.next_milestone_ts}:R>\n"
+                    f"Next gain: +{rewards.coins_per_milestone:,} 🪙 | +{rewards.balls_per_milestone:,} 🏐\n"
+                    f"🎟️ +{MAX_DURATION_BONUS_VOUCHERS} {voucher_suffix}: <t:{rewards.max_duration_ts}:R>"
+                )
+                rewards_value = (
+                    f"🪙 **{rewards.scout_coins:,}** Scout Coins\n"
+                    f"🏐 **{rewards.practice_balls:,}** Practice Balls"
+                )
 
-            # Right Column: Accumulated Rewards & Voucher status
-            rewards_value = (
-                f"🪙 **{rewards.scout_coins:,}** Scout Coins\n"
-                f"🏐 **{rewards.practice_balls:,}** Practice Balls\n"
-                f"🎟️ {voucher_label}: {voucher_val}"
-            )
-            embed.add_field(
-                name="Accumulated Rewards",
-                value=rewards_value,
-                inline=True
-            )
+            embed.add_field(name="Progress", value=progress_value, inline=True)
+            embed.add_field(name="Accumulated Rewards", value=rewards_value, inline=True)
 
-            # Bottom Full-Width Field: Exhaustion & Claim Rules
             bottom_notice = (
                 f"Claiming rewards always makes your squad exhausted for **{EXHAUSTION_HOURS} hours**. "
                 "Claiming before the first milestone yields **0 rewards**!"
             )
-            embed.add_field(
-                name="Rules & Exhaustion",
-                value=bottom_notice,
-                inline=False
-            )
-
-            embed.set_image(url="attachment://tokyo_trip.jpg")
-            return embed
+            embed.add_field(name="Rules & Exhaustion", value=bottom_notice, inline=False)
 
         # State 2: Locked (Requirement not met)
         elif not self.has_met_requirement:
             _, total_owned = self._check_unlock_requirement(self.all_user_cards)
-            title = "🔒 Tokyo Training Camp Locked"
-            description = (
-                "The powerhouse schools in Tokyo won't invite a small roster for a joint practice. "
-                "Scout more players to expand your team and get the invite.\n\n"
-                f"*(Progress: {total_owned}/{TOKYO_TRIP_MIN_OWNED} {RARITY_LABEL} players)*"
+            embed = discord.Embed(
+                title="🔒 Tokyo Training Camp Locked",
+                description=(
+                    "The powerhouse schools in Tokyo won't invite a small roster for a joint practice. "
+                    "Scout more players to expand your team and get the invite.\n\n"
+                    f"*(Progress: {total_owned}/{TOKYO_TRIP_MIN_OWNED} {RARITY_LABEL} players)*"
+                )
             )
 
         # State 3: Missing a complete lineup
         elif not self.has_full_lineup:
-            title = "⚠️ Incomplete Starting Lineup"
-            description = (
-                "You can't leave the club short-handed! You need at least one complete lineup "
-                "with all 7 starting positions filled before sending anyone away on a trip."
+            embed = discord.Embed(
+                title="⚠️ Incomplete Starting Lineup",
+                description=(
+                    "You can't leave the club short-handed! You need at least one complete lineup "
+                    "with all 7 starting positions filled before sending anyone away on a trip."
+                )
             )
 
         # State 4: No available filtered cards left
         elif not self.get_filtered_cards():
-            title = "⚠️ No Players Available for the Trip"
-            description = (
-                "Every qualified player is either locked into your team lineups or exhausted! "
-                f"Free up roster slots or recruit more {RARITY_LABEL} players to fill out your trip squad."
+            embed = discord.Embed(
+                title="⚠️ No Players Available for the Trip",
+                description=(
+                    "Every qualified player is either locked into your team lineups or exhausted! "
+                    f"Free up roster slots or recruit more {RARITY_LABEL} players to fill out your trip squad."
+                )
             )
 
         else:
@@ -209,13 +195,9 @@ class TripScreenView(BaseCardRosterView):
             scaled_stats = target_card.get("scaled_stats", target_card.get("base_stats", {}))
             return create_card_embed(target_card, extra_stats=scaled_stats)
 
-        # Shared setup for States 1 through 4
-        embed = discord.Embed(
-            title=title,
-            description=description,
-            color=discord.Color.teal()
-        )
-        embed.set_image(url="attachment://tokyo_trip.jpg")
+        # Shared color, image attachment, and return for States 1 through 4
+        embed.color = discord.Color.teal()
+        embed.set_image(url=f"attachment://{banner_filename}")
         return embed
 
     def _setup_components(self):
@@ -339,9 +321,10 @@ class TripScreenView(BaseCardRosterView):
     async def _handle_claim_rewards(self, interaction: discord.Interaction):
         await lock_view_ui(self, interaction)
 
-        elapsed_seconds = (datetime.now(timezone.utc) - self.trip_start).total_seconds()
+        rewards = calculate_tokyo_trip_rewards(self.trip_start, self.user_cards)
 
-        if elapsed_seconds < (INTERVAL_HOURS * 3600):
+        # Trigger confirmation if max duration has not been reached yet
+        if rewards.max_duration_ts is not None:
             self.is_clearing_confirmation = True
             await self.update_screen(interaction)
             return
@@ -473,7 +456,14 @@ class TripScreenView(BaseCardRosterView):
 
         # Determine whether to show the banner or the selected card image
         if self.is_active_trip or not filtered_cards:
-            banner_file = get_banner_file("tokyo_trip")
+            banner_key = "tokyo_trip"
+
+            if self.is_active_trip:
+                rewards = calculate_tokyo_trip_rewards(self.trip_start, self.user_cards)
+                if rewards.max_duration_ts is None:
+                    banner_key = "tokyo_trip_complete"
+
+            banner_file = get_banner_file(banner_key)
             attachments = [banner_file] if banner_file else []
         else:
             target_card = self._get_target_card(filtered_cards)

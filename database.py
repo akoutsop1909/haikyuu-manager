@@ -9,12 +9,11 @@ import asyncpg
 
 from pydantic import BaseModel, Field
 
-from game_logic import calculate_card_stats, get_single_level_cost, calculate_tokyo_trip_rewards
+from engine.game_logic import calculate_card_stats, get_single_level_cost, calculate_tokyo_trip_rewards
 
 # Import all pre-loaded static configurations and lookup dictionaries
-from data_loader import (
+from engine.data_loader import (
     CARDS_BY_ID, CARDS_BY_RARITY, BIRTHDAYS_BY_DATE,
-    SPECIALTIES_BY_ID, SYNERGIES_BY_ID, BONDS_BY_ID,
     STARTER_PACK, DAILY_REWARD, BIRTHDAY_REWARD, SCOUT_CONFIG,
     TRAINING_CONFIG, TOKYO_TRIP_CONFIG, ADMIN_PACK
 )
@@ -233,15 +232,6 @@ async def get_inventory(user_id: int) -> Inventory:
         return Inventory()
 
 
-async def get_tokyo_trip_start(user_id: int) -> datetime | None:
-    """Fetches the Tokyo trip start timestamp for a user."""
-    async with pool.acquire() as conn:
-        return await conn.fetchval(
-            "SELECT tokyo_trip_start FROM users WHERE user_id = $1",
-            user_id
-        )
-
-
 async def get_user_cards(user_id: int) -> list[dict]:
     """Fetches all cards owned by the user, joined with their card meta info, levels, resonance, and trip status."""
     async with pool.acquire() as conn:
@@ -262,7 +252,7 @@ async def get_user_cards(user_id: int) -> list[dict]:
             card_info = CARDS_BY_ID[cid].copy()
             level = row["level"]
             resonance = row["resonance"]
-            rarity = card_info.get("rarity", "S3")
+            rarity = card_info["rarity"]
 
             card_info["level"] = level
             card_info["resonance"] = resonance
@@ -396,9 +386,9 @@ async def claim_birthday(user_id: int) -> BirthdayClaim:
                 balls = BIRTHDAY_REWARD["base"]["practice_balls"]
 
                 if card_data["id"] in owned_ids:
-                    rarity = card_data.get("rarity", "S3")
+                    rarity = card_data["rarity"]
                     bonus_cfg = BIRTHDAY_REWARD["owner_bonus_by_rarity"].get(
-                        rarity, BIRTHDAY_REWARD["owner_bonus_by_rarity"]["S3"]
+                        rarity, BIRTHDAY_REWARD["owner_bonus_by_rarity"]["R"]
                     )
 
                     coins += bonus_cfg["scout_coins"]
@@ -467,7 +457,7 @@ async def perform_scout(user_id: int, scout_count: int) -> list[dict]:
 
             for cid in pulled_cids:
                 card_info = CARDS_BY_ID[cid].copy()
-                rarity = card_info.get("rarity", "S3")
+                rarity = card_info["rarity"]
 
                 if cid in owned_cards:
                     current_res = owned_cards[cid]
@@ -512,7 +502,7 @@ async def train_card(user_id: int, card_id: str, levels_to_add: int = 1, max_mod
     """Calculates and applies level upgrades using Practice Balls based on TRAINING_CONFIG."""
     max_lvl = TRAINING_CONFIG["max_level"]
     card_meta = CARDS_BY_ID.get(card_id)
-    rarity = card_meta.get("rarity", "S3")
+    rarity = card_meta["rarity"]
 
     async with pool.acquire() as conn:
         async with conn.transaction():
@@ -557,8 +547,8 @@ async def train_card(user_id: int, card_id: str, levels_to_add: int = 1, max_mod
 
 async def increase_resonance(user_id: int, card_id: str):
     card_meta = CARDS_BY_ID.get(card_id)
-    rarity = card_meta.get("rarity", "S3")
-    costs = TRAINING_CONFIG.get("resonance_drink_cost_by_rarity", {"S3": 1, "S4": 3, "S5": 5})
+    rarity = card_meta["rarity"]
+    costs = TRAINING_CONFIG.get("resonance_drink_cost_by_rarity", {"R": 1, "SR": 3, "SSR": 5})
     drink_cost = costs.get(rarity, 1)
 
     async with pool.acquire() as conn:
@@ -696,6 +686,17 @@ async def add_to_lineup(user_id: int, lineup_number: int, slot_name: str, card_i
             user_id, lineup_number, card_id, default_name
         )
 
+# ==============================================================================
+# 6. TOKYO TRIP
+# ==============================================================================
+async def get_tokyo_trip_start(user_id: int) -> datetime | None:
+    """Fetches the Tokyo trip start timestamp for a user."""
+    async with pool.acquire() as conn:
+        return await conn.fetchval(
+            "SELECT tokyo_trip_start FROM users WHERE user_id = $1",
+            user_id
+        )
+
 
 async def start_tokyo_trip(user_id: int, card_ids: list[str]):
     """Sets is_on_trip = TRUE for the specified cards and records the exact start timestamp."""
@@ -748,7 +749,7 @@ async def claim_tokyo_trip(user_id: int):
             for row in rows:
                 cid = row["card_id"]
                 card_meta = CARDS_BY_ID.get(cid, {})
-                user_cards_for_calc.append({"rarity": card_meta.get("rarity", "S3")})
+                user_cards_for_calc.append({"rarity": card_meta.get("rarity", "R")})
 
             # 4. Delegate reward, milestone, and voucher calculation to game_logic
             rewards = calculate_tokyo_trip_rewards(trip_start, user_cards_for_calc)
@@ -778,7 +779,7 @@ async def claim_tokyo_trip(user_id: int):
             )
 
 # ==============================================================================
-# 6. ADMIN & UTILITY OPERATIONS
+# 7. ADMIN & UTILITY OPERATIONS
 # ==============================================================================
 async def boost_admin_account(user_id: int) -> bool:
     """
@@ -839,3 +840,13 @@ async def grant_all_cards(user_id: int) -> dict:
                 "is_new": is_new,
                 "granted_cards_count": len(missing_cards)
             }
+
+async def force_complete_tokyo_trip(user_id: int):
+    """Forces an active Tokyo trip to reach its max duration instantly for testing/admin purposes."""
+    max_hours = TOKYO_TRIP_CONFIG["max_duration_hours"] + 1  # Add 1 hour buffer past max duration
+
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE users SET tokyo_trip_start = NOW() - INTERVAL '1 hour' * $1 WHERE user_id = $2",
+            max_hours, user_id
+        )

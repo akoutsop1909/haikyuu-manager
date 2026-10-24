@@ -1,7 +1,7 @@
 import discord
 
 from ui.utils import lock_view_ui, format_number
-from data_loader import CARDS_BY_ID, STARTER_PACK
+from engine.data_loader import CARDS_BY_ID, STARTER_PACK
 from database import register_user, claim_daily, claim_birthday, get_inventory
 
 
@@ -142,7 +142,10 @@ class UserHomeView(discord.ui.View):
     # --- ROW 1: Active Game Modes ---
     @discord.ui.button(label="Match", style=discord.ButtonStyle.success, emoji="⚔️", row=1)
     async def match_button(self, interaction: discord.Interaction, _button: discord.ui.Button):
-        await interaction.response.send_message("Match simulation starting...", ephemeral=True)
+        await lock_view_ui(self, interaction)
+        from ui.match import MatchScreenView
+        view, content, embed, attachments = await MatchScreenView.create(interaction.user.id)
+        await interaction.edit_original_response(content=content, embed=embed, view=view, attachments=attachments)
 
     @discord.ui.button(label="TOTC", style=discord.ButtonStyle.success, emoji="👑", row=1)
     async def totc_button(self, interaction: discord.Interaction, _button: discord.ui.Button):

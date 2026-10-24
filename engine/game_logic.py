@@ -1,6 +1,6 @@
 from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel, Field
-from data_loader import TRAINING_CONFIG, TOKYO_TRIP_CONFIG
+from engine.data_loader import TRAINING_CONFIG, TOKYO_TRIP_CONFIG
 
 class TokyoTripRewards(BaseModel):
     scout_coins: int = Field(default=0, ge=0)

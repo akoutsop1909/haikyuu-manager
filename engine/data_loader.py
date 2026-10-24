@@ -6,7 +6,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # Define project root relative to this file and target paths safely
-PROJECT_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = PROJECT_ROOT / "config" / "haikyuu_config.json"
 DATA_DIR = PROJECT_ROOT / "data"
 
@@ -26,7 +26,7 @@ with open(CONFIG_PATH, "r", encoding="utf-8") as f:
 
 # 1. Load Cards
 CARDS_BY_ID = {}
-CARDS_BY_RARITY = {"S3": [], "S4": [], "S5": []}
+CARDS_BY_RARITY = {"R": [], "SR": [], "SSR": []}
 BIRTHDAYS_BY_DATE = defaultdict(list)
 
 for json_file in (DATA_DIR / "cards").glob("*.json"):

@@ -1,8 +1,9 @@
 import discord
 
 from ui.utils import lock_view_ui, format_number
-from data_loader import ADMIN_PACK
-from database import boost_admin_account, grant_all_cards, user_exists, delete_user
+from engine.data_loader import ADMIN_PACK
+from database import boost_admin_account, grant_all_cards, user_exists, delete_user, get_tokyo_trip_start, \
+    force_complete_tokyo_trip
 
 
 def format_pack_resources() -> str:
@@ -16,22 +17,28 @@ def format_pack_resources() -> str:
 
 
 class AdminHomeView(discord.ui.View):
-    def __init__(self, user_id: int, has_account: bool = True):
+    def __init__(self, user_id: int, has_account: bool = True, has_active_trip: bool = False):
         super().__init__(timeout=180)
         self.user_id = user_id
 
-        # Disable the delete button if no account exists
-        if not has_account:
-            for child in self.children:
-                if isinstance(child, discord.ui.Button) and child.label == "Delete My Account":
+        # Disable buttons based on account or trip status
+        for child in self.children:
+            if isinstance(child, discord.ui.Button):
+                if child.label == "Delete My Account" and not has_account:
+                    child.disabled = True
+                    child.style = discord.ButtonStyle.secondary
+                elif child.label == "Complete Tokyo Trip" and not has_active_trip:
                     child.disabled = True
                     child.style = discord.ButtonStyle.secondary
 
     @classmethod
     async def create(cls, user_id: int):
-        """Asynchronously initialize the view with correct account status."""
+        """Asynchronously initialize the view with correct account and trip status."""
         exists = await user_exists(user_id)
-        return cls(user_id, has_account=exists)
+        trip_start = await get_tokyo_trip_start(user_id) if exists else None
+        has_active_trip = trip_start is not None
+
+        return cls(user_id, has_account=exists, has_active_trip=has_active_trip)
 
     @classmethod
     async def send_panel(cls, interaction: discord.Interaction):
@@ -100,6 +107,21 @@ class AdminHomeView(discord.ui.View):
         new_view = await AdminHomeView.create(interaction.user.id)
         await interaction.edit_original_response(embed=embed, view=new_view)
 
+    @discord.ui.button(label="Complete Tokyo Trip", style=discord.ButtonStyle.secondary, emoji="🚌", row=1)
+    async def complete_tokyo_trip(self, interaction: discord.Interaction, _button: discord.ui.Button):
+        await lock_view_ui(self, interaction)
+
+        await force_complete_tokyo_trip(interaction.user.id)
+
+        embed = discord.Embed(
+            title="🚌 Tokyo Trip Fast-Forwarded",
+            description="Your active Tokyo training camp trip has been forced to completion! Open the trip screen to claim your rewards.",
+            color=discord.Color.teal()
+        )
+
+        new_view = await AdminHomeView.create(interaction.user.id)
+        await interaction.edit_original_response(embed=embed, view=new_view)
+
     @discord.ui.button(label="Delete My Account", style=discord.ButtonStyle.danger, emoji="🗑️", row=1)
     async def delete_account(self, interaction: discord.Interaction, _button: discord.ui.Button):
         await lock_view_ui(self, interaction)
@@ -114,6 +136,7 @@ class AdminHomeView(discord.ui.View):
 
 class AdminConfirmDeleteView(discord.ui.View):
     """Confirmation view to prevent accidental account deletions."""
+
     def __init__(self, user_id: int):
         super().__init__(timeout=180)
         self.user_id = user_id
