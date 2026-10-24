@@ -3,14 +3,14 @@
     "scout_coins": 1000,
     "practice_balls": 5000,
     "cards": [
-      "s_kageyama_s5",
-      "op_daichi_s4",
-      "ws_asahi_s4",
-      "ws_tanaka_s4",
-      "mb_hinata_s4",
-      "mb_tsukishima_s4",
-      "l_nishinoya_s5",
-      "mb_yamaguchi_s3"
+      "s_kageyama_ssr",
+      "op_daichi_sr",
+      "ws_asahi_sr",
+      "ws_tanaka_sr",
+      "mb_hinata_sr",
+      "mb_tsukishima_sr",
+      "l_nishinoya_ssr",
+      "mb_yamaguchi_r"
     ]
   },
   "DAILY_REWARD": {
@@ -23,15 +23,15 @@
       "practice_balls": 2000
     },
     "owner_bonus_by_rarity": {
-      "S3": {
+      "R": {
         "scout_coins": 50,
         "practice_balls": 500
       },
-      "S4": {
+      "SR": {
         "scout_coins": 100,
         "practice_balls": 1000
       },
-      "S5": {
+      "SSR": {
         "scout_coins": 250,
         "practice_balls": 2500
       }
@@ -41,14 +41,14 @@
     "cost_per_pull": 100,
     "max_resonance": 5,
     "overflow_vouchers_by_rarity": {
-      "S3": 1,
-      "S4": 3,
-      "S5": 10
+      "R": 1,
+      "SR": 3,
+      "SSR": 10
     },
     "rarity_weights": {
-      "S3": 70,
-      "S4": 25,
-      "S5": 5
+      "R": 70,
+      "SR": 25,
+      "SSR": 5
     }
   },
   "TRAINING": {
@@ -58,24 +58,24 @@
     "base_cost": 20,
     "cost_growth_rate": 1.045,
     "stat_boost_per_level": {
-      "S3": 0.018,
-      "S4": 0.020,
-      "S5": 0.022
+      "R": 0.018,
+      "SR": 0.020,
+      "SSR": 0.022
     },
     "stat_boost_per_resonance": {
-      "S3": 0.03,
-      "S4": 0.04,
-      "S5": 0.05
+      "R": 0.03,
+      "SR": 0.04,
+      "SSR": 0.05
     },
     "resonance_drink_cost_by_rarity": {
-      "S3": 1,
-      "S4": 3,
-      "S5": 5
+      "R": 1,
+      "SR": 3,
+      "SSR": 5
     },
     "rarity_cost_multipliers": {
-      "S3": 1.0,
-      "S4": 1.2,
-      "S5": 1.5
+      "R": 1.0,
+      "SR": 1.2,
+      "SSR": 1.5
     }
   },
   "TEAM": {
@@ -85,8 +85,8 @@
   "TOKYO_TRIP": {
     "min_s3_s4_owned": 17,
     "allowed_rarities": [
-      "S3",
-      "S4"
+      "R",
+      "SR"
     ],
     "min_players": 1,
     "max_players": 5,
@@ -95,11 +95,11 @@
     "exhaustion_hours": 8,
     "max_duration_bonus_vouchers": 1,
     "rewards_by_rarity": {
-      "S3": {
+      "R": {
         "scout_coins": 30,
         "practice_balls": 150
       },
-      "S4": {
+      "SR": {
         "scout_coins": 50,
         "practice_balls": 200
       }
