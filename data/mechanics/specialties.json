@@ -2,10 +2,10 @@
   {
     "id": "precision_set",
     "name": "Precision Set",
-    "description": "Boosts team SPIKE by 25% of Setter's SET stat. Reduces opponent BLOCK by 10%.",
+    "description": "Boosts team SPIKE by 12% of Setter's SET stat. Reduces opponent BLOCK by 10%.",
     "type": "scaling_boost",
     "source_stat": "set",
-    "team_boost": { "stat": "spike", "ratio": 0.25 },
+    "team_boost": { "stat": "spike", "ratio": 0.12 },
     "opponent_debuff": { "stat": "block", "percent": 0.10 }
   },
   {

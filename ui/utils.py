@@ -1,7 +1,9 @@
 from collections import defaultdict
 from pathlib import Path
 import discord
+
 from engine.data_loader import CARDS_BY_ID, SPECIALTIES_BY_ID, BONDS_BY_ID, SYNERGIES_BY_ID, TEAM_CONFIG, STARTING_SLOTS
+from engine.stat_boosts import apply_lineup_boosts
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 ASSETS_DIR = PROJECT_ROOT / "assets"
@@ -85,60 +87,72 @@ def get_card_image_file(card_data: dict) -> discord.File | None:
 # ==============================================================================
 # 3. EMBED & COURT DISPLAY BUILDERS
 # ==============================================================================
-def format_lineup_court_display(lineup_data: dict, user_cards: list[dict], lineup_index: int = 1) -> dict:
-    """Builds the ASCII court layout, active bonds/synergies summary, and total power for a lineup."""
-    lineup_name = lineup_data.get("lineup_name", f"Lineup {lineup_index}")
-    card_lookup = {c["id"]: c for c in user_cards}
+def calculate_team_context(lineup_data: dict, user_cards: list[dict]) -> dict:
+    """Calculates core team power using fully boosted stats, active bonds, and synergy school."""
+    boosted_stats_map = apply_lineup_boosts(lineup_data, user_cards)
 
+    card_lookup = {c["id"]: c for c in user_cards}
     team_power = 0
     starting_card_ids = set()
     school_counts = defaultdict(int)
 
-    for slot in STARTING_SLOTS:
+    for slot, stats in boosted_stats_map.items():
+        team_power += sum(stats.values())  # Sums the *boosted* stats instead of raw base stats!
+
         cid = lineup_data.get(slot)
         if cid and cid in card_lookup:
             starting_card_ids.add(cid)
-            card = card_lookup[cid]
-            stats = card.get("scaled_stats", card.get("base_stats", {}))
-            team_power += sum(stats.values())
-            school_counts[card["school"]] += 1
+            school_counts[card_lookup[cid]["school"]] += 1
 
-    # Setter Specialty & Bonds check
-    setter_cid = lineup_data.get("setter")
-    setter_card = CARDS_BY_ID.get(setter_cid) if setter_cid else None
-    spec_id = setter_card["specialty_id"] if setter_card else None
-    active_specialty_name = SPECIALTIES_BY_ID[spec_id]["name"] if spec_id else None
-
+    # Bonds check
     active_bonds_count = 0
     for bond in BONDS_BY_ID.values():
         req_players = set(bond.get("required_players", []))
         if req_players and req_players.issubset(starting_card_ids):
             active_bonds_count += 1
 
-    meta_parts = [f"Power: {team_power:,}"]
+    # Synergy check
+    active_synergy_school = None
+    for school, count in school_counts.items():
+        if count >= MIN_SYNERGY_PLAYERS:
+            active_synergy_school = school
+            break
+
+    return {
+        "team_power": team_power,
+        "active_bonds_count": active_bonds_count,
+        "active_synergy_school": active_synergy_school
+    }
+
+def format_lineup_court_display(lineup_data: dict, user_cards: list[dict], lineup_index: int = 1) -> str:
+    """Builds the ASCII court layout and summary text."""
+    ctx = calculate_team_context(lineup_data, user_cards)
+    lineup_name = lineup_data.get("lineup_name", f"Lineup {lineup_index}")
+
+    # Check setter specialty for the UI summary bar
+    setter_cid = lineup_data.get("setter")
+    setter_card = CARDS_BY_ID.get(setter_cid) if setter_cid else None
+    spec_id = setter_card["specialty_id"] if setter_card else None
+    active_specialty_name = SPECIALTIES_BY_ID[spec_id]["name"] if spec_id else None
+
+    # Build summary string
+    meta_parts = [f"Power: {ctx['team_power']:,}"]
     if active_specialty_name:
         meta_parts.append(active_specialty_name)
-    if active_bonds_count > 0:
-        meta_parts.append(f"{active_bonds_count} Bond{'s' if active_bonds_count > 1 else ''}")
+    if ctx['active_bonds_count'] > 0:
+        meta_parts.append(f"{ctx['active_bonds_count']} Bond{'s' if ctx['active_bonds_count'] > 1 else ''}")
 
     summary_str = " • ".join(meta_parts)
 
-    # Synergy check
-    active_synergy_line = None
-    has_active_synergy = False
-    for school, count in school_counts.items():
-        if count >= MIN_SYNERGY_PLAYERS:
-            has_active_synergy = True
-
-            matched_synergy = next(
-                (s for s in SYNERGIES_BY_ID.values() if s.get("school", "").lower() == school.lower()),
-                None
-            )
-            syn_desc = matched_synergy.get("description", "Active Synergy") if matched_synergy else "Active Synergy"
-            active_synergy_line = f"*🏫 Synergy ({school})*\n*{syn_desc}*"
-            break
-
-    if not active_synergy_line:
+    # Synergy description lookup specifically for the UI display
+    if ctx['active_synergy_school']:
+        matched_synergy = next(
+            (s for s in SYNERGIES_BY_ID.values() if s.get("school", "").lower() == ctx['active_synergy_school'].lower()),
+            None
+        )
+        syn_desc = matched_synergy.get("description", "Active Synergy") if matched_synergy else "Active Synergy"
+        active_synergy_line = f"*🏫 Synergy ({ctx['active_synergy_school']})*\n*{syn_desc}*"
+    else:
         active_synergy_line = f"*🏫 Synergy (None)*\n*Needs at least {MIN_SYNERGY_PLAYERS} starter players of the same school*"
 
     def get_slot_short(key: str) -> str:
@@ -156,6 +170,7 @@ def format_lineup_court_display(lineup_data: dict, user_cards: list[dict], lineu
     l = get_slot_short("libero")
     ps = get_slot_short("pinch_server")
 
+    # 4. Return just the formatted content string
     content = (
         f"### 🎽 {lineup_name}\n"
         f"*{summary_str}*\n"
@@ -171,12 +186,7 @@ def format_lineup_court_display(lineup_data: dict, user_cards: list[dict], lineu
         f"```"
     )
 
-    return {
-        "content": content,
-        "team_power": team_power,
-        "active_bonds_count": active_bonds_count,
-        "has_active_synergy": has_active_synergy
-    }
+    return content
 
 def create_card_embed(
     card_data: dict,

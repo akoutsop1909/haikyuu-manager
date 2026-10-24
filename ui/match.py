@@ -4,6 +4,7 @@ import discord
 from ui.utils import lock_view_ui, format_lineup_court_display, create_card_embed, add_card_metadata_fields, \
     LineupSelectMenu, CardSelectMenu, BaseCardRosterView
 from engine.data_loader import STARTING_SLOTS, ALL_SLOTS
+from engine.stat_boosts import apply_lineup_boosts
 from database import get_lineups, get_user_cards
 
 
@@ -33,28 +34,33 @@ class MatchScreenView(BaseCardRosterView):
 
     async def build_content(self) -> str:
         team_data = self.lineups.get(self.selected_lineup_index, {})
-        result = format_lineup_court_display(team_data, self.user_cards, self.selected_lineup_index)
-        return result["content"]
+        content = format_lineup_court_display(team_data, self.user_cards, self.selected_lineup_index)
+        return content
 
     async def build_embed(self) -> discord.Embed | None:
         filtered_cards = self.get_filtered_cards()
         target_card = self._get_target_card(filtered_cards)
 
-        # If the lineup is empty, simply return None (no embed)
         if not target_card:
             return None
 
         team_data = self.lineups.get(self.selected_lineup_index, {})
-        card_lookup = {c["id"]: c for c in self.user_cards}
 
+        # 1. Get all fully boosted stats for the lineup
+        boosted_stats_map = apply_lineup_boosts(team_data, self.user_cards)
+
+        # 2. Find which slot this target card occupies, and grab its boosted stats
+        target_slot = next((slot for slot, cid in team_data.items() if cid == target_card["id"]), None)
+        card_stats = boosted_stats_map.get(target_slot, target_card.get("scaled_stats", target_card.get("base_stats", {})))
+
+        card_lookup = {c["id"]: c for c in self.user_cards}
         active_lineup_card_ids = {
             team_data.get(slot) for slot in STARTING_SLOTS
             if team_data.get(slot) in card_lookup
         }
 
-        scaled_stats = target_card.get("scaled_stats", target_card.get("base_stats", {}))
-        embed = create_card_embed(target_card, extra_stats=scaled_stats)
-
+        # 3. Pass the boosted stats into the embed!
+        embed = create_card_embed(target_card, extra_stats=card_stats)
         add_card_metadata_fields(embed, target_card, active_lineup_card_ids=active_lineup_card_ids)
         return embed
 

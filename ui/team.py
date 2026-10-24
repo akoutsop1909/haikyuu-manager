@@ -62,8 +62,8 @@ class TeamScreenView(BaseCardRosterView):
 
     async def build_content(self) -> str:
         team_data = self.lineups.get(self.selected_lineup_index, {})
-        result = format_lineup_court_display(team_data, self.user_cards, self.selected_lineup_index)
-        return result["content"]
+        content = format_lineup_court_display(team_data, self.user_cards, self.selected_lineup_index)
+        return content
 
     async def build_embed(self) -> discord.Embed:
         filtered_cards = self.get_filtered_cards()
