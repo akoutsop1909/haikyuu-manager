@@ -2,15 +2,22 @@ import asyncio
 import discord
 
 from ui.utils import lock_view_ui, create_card_embed, format_number, PositionFilterSelectMenu, CardSelectMenu, BaseCardRosterView
-from game_logic import get_level_cost
-from data_loader import TRAINING_CONFIG
-from database import get_inventory, get_user_cards, train_card, craft_drink, increase_resonance
+from engine.game_logic import get_level_cost
+from engine.data_loader import TRAINING_CONFIG, ITEM_METADATA
+from database import get_inventory, get_user_cards, train_card, redeem_drink, increase_resonance
 
-# Load training configurations
+# Load training configurations & item metadata shortcuts
 MAX_LVL = TRAINING_CONFIG["max_level"]
 MAX_RES = TRAINING_CONFIG["max_resonance"]
 CRAFT_VOUCHER_COST = TRAINING_CONFIG["drink_craft_cost"]
 COSTS = TRAINING_CONFIG["resonance_drink_cost_by_rarity"]
+
+BALL_NAME = ITEM_METADATA["balls"]["name"]
+BALL_EMOJI = ITEM_METADATA["balls"]["emoji"]
+DRINK_NAME = ITEM_METADATA["drinks"]["name"]
+DRINK_EMOJI = ITEM_METADATA["drinks"]["emoji"]
+VOUCHER_NAME = ITEM_METADATA["vouchers"]["name"]
+VOUCHER_EMOJI = ITEM_METADATA["vouchers"]["emoji"]
 
 class TrainScreenView(BaseCardRosterView):
     def __init__(self, user_id: int, user_cards: list[dict], inventory, selected_card_id: str | None = None):
@@ -48,10 +55,10 @@ class TrainScreenView(BaseCardRosterView):
             cost_max = get_level_cost(current_lvl, MAX_LVL - current_lvl, rarity)
 
             cost_text = (
-                f"• +1 Level: 🏐 **{format_number(cost_next)}**\n"
-                f"• +5 Levels: 🏐 **{format_number(cost_5)}**\n"
-                f"• +10 Levels: 🏐 **{format_number(cost_10)}**\n"
-                f"• To MAX (Lv.{MAX_LVL}): 🏐 **{format_number(cost_max)}**"
+                f"• +1 Level: {BALL_EMOJI} **{format_number(cost_next)}**\n"
+                f"• +5 Levels: {BALL_EMOJI} **{format_number(cost_5)}**\n"
+                f"• +10 Levels: {BALL_EMOJI} **{format_number(cost_10)}**\n"
+                f"• To MAX (Lv.{MAX_LVL}): {BALL_EMOJI} **{format_number(cost_max)}**"
             )
             embed.add_field(name="📈 Upgrade Costs", value=cost_text, inline=False)
         else:
@@ -61,20 +68,20 @@ class TrainScreenView(BaseCardRosterView):
         res_drink_cost = COSTS.get(rarity, 1)
 
         if current_res < MAX_RES:
-            res_line = f"• +1 Resonance: 🥤 **{res_drink_cost}**"
+            res_line = f"• +1 Resonance: {DRINK_EMOJI} **{res_drink_cost}**"
         else:
             res_line = f"• Max Resonance Reached! (★{MAX_RES})"
 
-        craft_line = f"• Craft **1** 🥤 Sports Drink: 🎟️ **{CRAFT_VOUCHER_COST}**"
+        craft_line = f"• Craft **1** {DRINK_EMOJI} {DRINK_NAME}: {VOUCHER_EMOJI} **{CRAFT_VOUCHER_COST}**"
         res_text = f"{res_line}\n{craft_line}"
 
         embed.add_field(name="🌟 Resonance & Crafting", value=res_text, inline=False)
 
         embed.set_footer(
             text=
-            f"Balance: 🏐 {format_number(self.inventory.practice_balls)}  •  "
-            f"🥤 {format_number(self.inventory.sports_drinks)}  •  "
-            f"🎟️ {format_number(self.inventory.drink_vouchers)}"
+            f"Balance: {BALL_EMOJI} {format_number(self.inventory.practice_balls)}  •  "
+            f"{DRINK_EMOJI} {format_number(self.inventory.sports_drinks)}  •  "
+            f"{VOUCHER_EMOJI} {format_number(self.inventory.drink_vouchers)}"
         )
 
         return embed
@@ -120,14 +127,14 @@ class TrainScreenView(BaseCardRosterView):
 
         # Row 3: Resonance & Exchange Actions
         btn_res = discord.ui.Button(label="+1 Resonance", style=discord.ButtonStyle.primary, row=3)
-        btn_exchange = discord.ui.Button(label="Craft Sports Drink", style=discord.ButtonStyle.secondary, emoji="🥤", row=3)
+        btn_redeem = discord.ui.Button(label="Redeem Sports Drink", style=discord.ButtonStyle.secondary, emoji="🥤", row=3)
 
         btn_res.disabled = is_max_resonance
         btn_res.callback = self._handle_resonance
-        btn_exchange.callback = self._handle_craft
+        btn_redeem.callback = self._handle_redeem
 
         self.add_item(btn_res)
-        self.add_item(btn_exchange)
+        self.add_item(btn_redeem)
 
         # Row 4: Navigation
         btn_prev = discord.ui.Button(label="Prev", style=discord.ButtonStyle.secondary, emoji="◀️", row=4,
@@ -163,7 +170,7 @@ class TrainScreenView(BaseCardRosterView):
 
         if self.inventory.practice_balls < cost_one_level:
             await interaction.response.send_message(
-                "❌ You don't have enough 🏐 **Practice Balls** to train this player!",
+                f"❌ You don't have enough {BALL_EMOJI} **{BALL_NAME}** to train this player!",
                 ephemeral=True
             )
             return
@@ -179,7 +186,7 @@ class TrainScreenView(BaseCardRosterView):
 
         if self.inventory.sports_drinks < res_drink_cost:
             await interaction.response.send_message(
-                f"❌ You need at least 🥤 **{res_drink_cost}** Sports Drinks to increase Resonance for this player!",
+                f"❌ You need at least {DRINK_EMOJI} **{res_drink_cost}** {DRINK_NAME} to increase Resonance for this player!",
                 ephemeral=True
             )
             return
@@ -188,16 +195,16 @@ class TrainScreenView(BaseCardRosterView):
         await increase_resonance(self.user_id, self.selected_card_id)
         await self.update_screen(interaction)
 
-    async def _handle_craft(self, interaction: discord.Interaction):
+    async def _handle_redeem(self, interaction: discord.Interaction):
         if self.inventory.drink_vouchers < CRAFT_VOUCHER_COST:
             await interaction.response.send_message(
-                f"❌ You need at least 🎟️ **{CRAFT_VOUCHER_COST}** Drink Vouchers to craft a Sports Drink!",
+                f"❌ You need at least {VOUCHER_EMOJI} **{CRAFT_VOUCHER_COST}** {VOUCHER_NAME} to redeem **1** {DRINK_NAME}!",
                 ephemeral=True
             )
             return
 
         await lock_view_ui(self, interaction)
-        await craft_drink(self.user_id)
+        await redeem_drink(self.user_id)
         await self.update_screen(interaction)
 
     async def _get_screen_payload(self) -> tuple[str, discord.Embed, list[discord.File]]:

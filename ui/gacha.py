@@ -1,9 +1,12 @@
 import discord
 
-from ui.utils import lock_view_ui, format_number
-from engine.data_loader import CARDS_BY_ID, STARTER_PACK
+from ui.utils import lock_view_ui, format_inventory_lines
+from engine.data_loader import CARDS_BY_ID, STARTER_PACK, ITEM_METADATA
 from database import register_user, claim_daily, claim_birthday, get_inventory
 
+# Load item metadata shortcuts
+COIN_EMOJI = ITEM_METADATA["coins"]["emoji"]
+BALL_EMOJI = ITEM_METADATA["balls"]["emoji"]
 
 class UserHomeView(discord.ui.View):
     def __init__(self, user_id: int):
@@ -30,7 +33,7 @@ class UserHomeView(discord.ui.View):
             if daily.claimed:
                 daily_status = (
                     f"\n\n**Daily Reward Claimed!**\n"
-                    f"+{daily.scout_coins:,} 🪙   +{daily.practice_balls:,} 🏐\n"
+                    f"+{daily.scout_coins:,} {COIN_EMOJI}   +{daily.practice_balls:,} {BALL_EMOJI}\n"
                     f"📅 Days Played: {daily.total_logins}\n"
                     f"⏳ Reset: <t:{daily.next_reset}:R>"
                 )
@@ -73,7 +76,7 @@ class UserHomeView(discord.ui.View):
                 name=title,
                 value=(
                     f"{names_list}\n"
-                    f"+{birthday.scout_coins:,} 🪙   +{birthday.practice_balls:,} 🏐{bonus_text}"
+                    f"+{birthday.scout_coins:,} {COIN_EMOJI}   +{birthday.practice_balls:,} {BALL_EMOJI}{bonus_text}"
                 ),
                 inline=False
             )
@@ -96,7 +99,7 @@ class UserHomeView(discord.ui.View):
             embed.add_field(
                 name="Starter Pack Received",
                 value=(
-                    f"+{STARTER_PACK['scout_coins']:,} 🪙   +{STARTER_PACK['practice_balls']:,} 🏐\n\n"
+                    f"+{STARTER_PACK['scout_coins']:,} {COIN_EMOJI}   +{STARTER_PACK['practice_balls']:,} {BALL_EMOJI}\n\n"
                     f"**Starter Team**\n"
                     f"{team_lines}"
                 ),
@@ -105,12 +108,7 @@ class UserHomeView(discord.ui.View):
 
         embed.add_field(
             name="Inventory",
-            value=(
-                f"🪙 Scout Coins: **{format_number(inventory.scout_coins)}**\n"
-                f"🏐 Practice Balls: **{format_number(inventory.practice_balls)}**\n"
-                f"🥤 Sports Drinks: **{format_number(inventory.sports_drinks)}**\n"
-                f"🎟️ Drink Vouchers: **{format_number(inventory.drink_vouchers)}**"
-            ),
+            value=format_inventory_lines(inventory),
             inline=False
         )
 

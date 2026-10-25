@@ -5,10 +5,10 @@ import discord
 from ui.utils import lock_view_ui, create_card_embed, get_card_image_file, get_banner_file, PositionFilterSelectMenu, \
     CardSelectMenu, BaseCardRosterView
 from engine.game_logic import calculate_tokyo_trip_rewards
-from engine.data_loader import TOKYO_TRIP_CONFIG, STARTING_SLOTS, ALL_SLOTS
+from engine.data_loader import TOKYO_TRIP_CONFIG, ITEM_METADATA, STARTING_SLOTS, ALL_SLOTS
 from database import get_user_cards, get_lineups, get_tokyo_trip_start, start_tokyo_trip, claim_tokyo_trip
 
-# Load Tokyo trip configurations
+# Load Tokyo trip configurations & item medatadata shortcuts
 TOKYO_TRIP_MIN_OWNED = TOKYO_TRIP_CONFIG["min_s3_s4_owned"]
 TOKYO_TRIP_MAX_PLAYERS = TOKYO_TRIP_CONFIG["max_players"]
 ALLOWED_RARITIES = tuple(TOKYO_TRIP_CONFIG.get("allowed_rarities", ["R", "SR"]))
@@ -20,6 +20,13 @@ INTERVAL_HOURS = TOKYO_TRIP_CONFIG["milestone_interval_hours"]
 EXHAUSTION_HOURS = TOKYO_TRIP_CONFIG["exhaustion_hours"]
 MAX_DURATION_HOURS = TOKYO_TRIP_CONFIG["max_duration_hours"]
 MAX_DURATION_BONUS_VOUCHERS = TOKYO_TRIP_CONFIG["max_duration_bonus_vouchers"]
+
+COIN_NAME = ITEM_METADATA["coins"]["name"]
+COIN_EMOJI = ITEM_METADATA["coins"]["emoji"]
+BALL_NAME = ITEM_METADATA["balls"]["name"]
+BALL_EMOJI = ITEM_METADATA["balls"]["emoji"]
+VOUCHER_NAME = ITEM_METADATA["vouchers"]["name"]
+VOUCHER_EMOJI = ITEM_METADATA["vouchers"]["emoji"]
 
 class TripScreenView(BaseCardRosterView):
     def __init__(self, user_id: int, user_cards: list[dict], all_user_cards: list[dict] | None = None,
@@ -91,10 +98,10 @@ class TripScreenView(BaseCardRosterView):
         reward_preview = (
             f"\n\n**Trip Rules & Rewards:**\n"
             f"• Rewards per Rarity:\n"
-            f"  ▫️ R: +{R_R['scout_coins']} 🪙 | +{R_R['practice_balls']} 🏐\n"
-            f"  ▫️ SR: +{SR_R['scout_coins']} 🪙 | +{SR_R['practice_balls']} 🏐\n"
-            f"• Rewards (every {INTERVAL_HOURS}h, max {max_milestones}): +{coins_per_milestone:,} 🪙 | +{balls_per_milestone:,} 🏐\n"
-            f"• Max Duration Bonus ({MAX_DURATION_HOURS}h): +{MAX_DURATION_BONUS_VOUCHERS} 🎟️\n"
+            f"  ▫️ R: +{R_R['scout_coins']} {COIN_EMOJI} | +{R_R['practice_balls']} {BALL_EMOJI}\n"
+            f"  ▫️ SR: +{SR_R['scout_coins']} {COIN_EMOJI} | +{SR_R['practice_balls']} {BALL_EMOJI}\n"
+            f"• Rewards (every {INTERVAL_HOURS}h, max {max_milestones}): +{coins_per_milestone:,} {COIN_EMOJI} | +{balls_per_milestone:,} {BALL_EMOJI}\n"
+            f"• Max Duration Bonus ({MAX_DURATION_HOURS}h): +{MAX_DURATION_BONUS_VOUCHERS} {VOUCHER_EMOJI}\n"
             f"• Exhaustion: {EXHAUSTION_HOURS}h upon claim\n"
             f"*(Note: Lineup and exhausted players are hidden)*"
         )
@@ -125,26 +132,25 @@ class TripScreenView(BaseCardRosterView):
 
             # Check if max duration has been reached
             is_max_duration = rewards.max_duration_ts is None
-            voucher_suffix = "Drink Voucher" if MAX_DURATION_BONUS_VOUCHERS == 1 else "Drink Vouchers"
 
             if is_max_duration:
                 progress_value = "Trip complete! Rewards are ready to claim."
                 rewards_value = (
-                    f"🪙 **{rewards.scout_coins:,}** Scout Coins\n"
-                    f"🏐 **{rewards.practice_balls:,}** Practice Balls\n"
-                    f"🎟️ **{MAX_DURATION_BONUS_VOUCHERS}** {voucher_suffix}"
+                    f"{COIN_EMOJI} **{rewards.scout_coins:,}** {COIN_NAME}\n"
+                    f"{BALL_EMOJI} **{rewards.practice_balls:,}** {BALL_NAME}\n"
+                    f"{VOUCHER_EMOJI} **{MAX_DURATION_BONUS_VOUCHERS}** {VOUCHER_NAME}"
                 )
                 banner_filename = "tokyo_trip_complete.webp"
             else:
                 progress_value = (
                     f"Milestones: {rewards.current_milestones}/{rewards.max_milestones}\n"
                     f"Next milestone: <t:{rewards.next_milestone_ts}:R>\n"
-                    f"Next gain: +{rewards.coins_per_milestone:,} 🪙 | +{rewards.balls_per_milestone:,} 🏐\n"
-                    f"🎟️ +{MAX_DURATION_BONUS_VOUCHERS} {voucher_suffix}: <t:{rewards.max_duration_ts}:R>"
+                    f"Next gain: +{rewards.coins_per_milestone:,} {COIN_EMOJI} | +{rewards.balls_per_milestone:,} {BALL_EMOJI}\n"
+                    f"{VOUCHER_EMOJI} +{MAX_DURATION_BONUS_VOUCHERS} {VOUCHER_NAME}: <t:{rewards.max_duration_ts}:R>"
                 )
                 rewards_value = (
-                    f"🪙 **{rewards.scout_coins:,}** Scout Coins\n"
-                    f"🏐 **{rewards.practice_balls:,}** Practice Balls"
+                    f"{COIN_EMOJI} **{rewards.scout_coins:,}** {COIN_NAME}\n"
+                    f"{BALL_EMOJI} **{rewards.practice_balls:,}** {BALL_NAME}"
                 )
 
             embed.add_field(name="Progress", value=progress_value, inline=True)

@@ -2,7 +2,7 @@ from collections import defaultdict
 from pathlib import Path
 import discord
 
-from engine.data_loader import CARDS_BY_ID, SPECIALTIES_BY_ID, BONDS_BY_ID, SYNERGIES_BY_ID, TEAM_CONFIG, STARTING_SLOTS
+from engine.data_loader import CARDS_BY_ID, SPECIALTIES_BY_ID, BONDS_BY_ID, SYNERGIES_BY_ID, TEAM_CONFIG, ITEM_METADATA
 from engine.stat_boosts import apply_lineup_boosts
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -26,6 +26,24 @@ async def lock_view_ui(view: discord.ui.View, interaction: discord.Interaction):
             child.disabled = True
     if not interaction.response.is_done():
         await interaction.response.edit_message(view=view)
+
+def format_inventory_lines(data: dict | object) -> str:
+    """Formats the standard 4 game inventory from either a dict or an inventory/pack object."""
+    resource_keys = [
+        ("pass", "match_passes"),
+        ("coins", "scout_coins"),
+        ("balls", "practice_balls"),
+        ("drinks", "sports_drinks"),
+        ("vouchers", "drink_vouchers"),
+        ("scraps", "voucher_scraps")
+    ]
+    lines = []
+    for meta_key, attr_key in resource_keys:
+        meta = ITEM_METADATA[meta_key]
+        amount = data.get(attr_key, 0) if isinstance(data, dict) else getattr(data, attr_key, 0)
+        lines.append(f"{meta['emoji']} {meta['name']}: **{format_number(amount)}**")
+
+    return "\n".join(lines)
 
 def format_number(val: int) -> str:
     """Formats large integers into compact strings (e.g., 100M, 10.5K, 1,200)."""
@@ -191,7 +209,6 @@ def format_lineup_court_display(lineup_data: dict, user_cards: list[dict], lineu
 def create_card_embed(
     card_data: dict,
     extra_stats: dict | None = None,
-    override_title: str | None = None,
     show_level_info: bool = True
 ) -> discord.Embed:
     color_val = int(card_data.get("embed_color", "0xFF6600"), 16)
@@ -202,7 +219,7 @@ def create_card_embed(
     rarity_emoji = RARITY_EMOJIS.get(rarity, "🔵")
 
     embed = discord.Embed(
-        title=override_title or f"{rarity_emoji} {rarity} {name}",
+        title=f"{rarity_emoji} *({rarity})* {name}",
         description=f"*{quote}*" if quote else None,
         color=color_val
     )

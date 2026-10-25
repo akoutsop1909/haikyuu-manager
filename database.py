@@ -41,10 +41,12 @@ class BirthdayClaim(BaseModel):
     practice_balls: int = Field(default=0, ge=0)
 
 class Inventory(BaseModel):
-    scout_coins: int = Field(default=0, ge=0)  # ge=0 guarantees non-negative balances
+    match_passes: int = Field(default=0, ge=0)
+    scout_coins: int = Field(default=0, ge=0)
     practice_balls: int = Field(default=0, ge=0)
     sports_drinks: int = Field(default=0, ge=0)
     drink_vouchers: int = Field(default=0, ge=0)
+    voucher_scraps: int = Field(default=0, ge=0)
 
 # ==============================================================================
 # 1. DATABASE SETUP & CONNECTION HELPERS
@@ -64,10 +66,12 @@ async def init_db_pool():
             CREATE TABLE IF NOT EXISTS users (
                 user_id BIGINT PRIMARY KEY,
 
+                match_passes INT DEFAULT 0 CHECK (match_passes >= 0),
                 scout_coins INT DEFAULT 0 CHECK (scout_coins >= 0),
                 practice_balls INT DEFAULT 0 CHECK (practice_balls >= 0),
                 sports_drinks INT DEFAULT 0 CHECK (sports_drinks >= 0),
                 drink_vouchers INT DEFAULT 0 CHECK (drink_vouchers >= 0),
+                voucher_scraps INT DEFAULT 0 CHECK (voucher_scraps >= 0),
 
                 last_daily_claim TIMESTAMPTZ,
                 last_birthday_claim TIMESTAMPTZ,
@@ -220,7 +224,7 @@ async def get_inventory(user_id: int) -> Inventory:
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             """
-            SELECT scout_coins, practice_balls, sports_drinks, drink_vouchers 
+            SELECT match_passes, scout_coins, practice_balls, sports_drinks, drink_vouchers, voucher_scraps 
             FROM users WHERE user_id = $1
             """,
             user_id
@@ -567,8 +571,8 @@ async def increase_resonance(user_id: int, card_id: str):
             )
 
 
-async def craft_drink(user_id: int):
-    """Crafts 1 Sports Drink using drink vouchers. Returns True on success."""
+async def redeem_drink(user_id: int):
+    """Redeems 1 Sports Drink using drink vouchers. Returns True on success."""
     craft_cost = TRAINING_CONFIG["drink_craft_cost"]
 
     async with pool.acquire() as conn:

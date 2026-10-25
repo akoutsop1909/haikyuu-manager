@@ -76,6 +76,15 @@ MATCH_CONFIG = CONFIG.get("MATCH", {})
 TOKYO_TRIP_CONFIG = CONFIG.get("TOKYO_TRIP", {})
 ADMIN_PACK = CONFIG.get("ADMIN_PACK", {})
 
+ITEM_METADATA = {
+    "pass": {"name": "Match Passes", "short": "Passes", "emoji": "🪪"},
+    "coins": {"name": "Scout Coins", "short": "Coins", "emoji": "🪙"},
+    "balls": {"name": "Practice Balls", "short": "Balls", "emoji": "🏐"},
+    "drinks": {"name": "Sports Drinks", "short": "Drinks", "emoji": "🥤"},
+    "vouchers": {"name": "Drink Vouchers", "short": "Vouchers", "emoji": "🎟️"},
+    "scraps": {"name": "Voucher Scraps", "short": "Scraps", "emoji": "🧾"},
+}
+
 STARTING_SLOTS = [
     "setter", "opposite", "wing_spiker_1", "wing_spiker_2",
     "middle_blocker_1", "middle_blocker_2", "libero"

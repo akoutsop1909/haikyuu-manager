@@ -1,20 +1,9 @@
 import discord
 
-from ui.utils import lock_view_ui, format_number
+from ui.utils import lock_view_ui, format_inventory_lines
 from engine.data_loader import ADMIN_PACK
 from database import boost_admin_account, grant_all_cards, user_exists, delete_user, get_tokyo_trip_start, \
     force_complete_tokyo_trip
-
-
-def format_pack_resources() -> str:
-    """Helper to return formatted resource reward lines."""
-    return (
-        f"🪙 Scout Coins: **{format_number(ADMIN_PACK['scout_coins'])}**\n"
-        f"🏐 Practice Balls: **{format_number(ADMIN_PACK['practice_balls'])}**\n"
-        f"🥤 Sports Drinks: **{format_number(ADMIN_PACK['sports_drinks'])}**\n"
-        f"🎟️ Drink Vouchers: **{format_number(ADMIN_PACK['drink_vouchers'])}**"
-    )
-
 
 class AdminHomeView(discord.ui.View):
     def __init__(self, user_id: int, has_account: bool = True, has_active_trip: bool = False):
@@ -69,10 +58,10 @@ class AdminHomeView(discord.ui.View):
 
         if is_new:
             status_text = "Created New Admin Account"
-            desc = "🎁 **Starter Pack & Starter Team 1** granted!\n\n**Admin Pack Items:**\n" + format_pack_resources()
+            desc = "🎁 **Starter Pack & Starter Team 1** granted!\n\n**Admin Pack Items:**\n" + format_inventory_lines()
         else:
             status_text = "Boosted Existing Account"
-            desc = format_pack_resources()
+            desc = format_inventory_lines(ADMIN_PACK)
 
         embed = discord.Embed(
             title=f"✅ {status_text}",
@@ -91,7 +80,7 @@ class AdminHomeView(discord.ui.View):
 
         if result["is_new"]:
             status_prefix = "Created Admin Account & "
-            desc = "🎁 **Starter Pack & Starter Team 1** granted!\n\n**Admin Pack Items:**\n" + format_pack_resources() + "\n\n"
+            desc = "🎁 **Starter Pack & Starter Team 1** granted!\n\n**Admin Pack Items:**\n" + format_inventory_lines() + "\n\n"
         else:
             status_prefix = ""
             desc = ""

@@ -3,13 +3,18 @@ import discord
 from ui.gacha import UserHomeView
 from ui.utils import lock_view_ui, create_card_embed, get_card_image_file, get_banner_file, format_resonance_stars, \
     format_resonance_badge, format_number
-from engine.data_loader import SCOUT_CONFIG
+from engine.data_loader import SCOUT_CONFIG, ITEM_METADATA
 from database import get_inventory, perform_scout
 
-# Load scout configurations
+# Load scout configurations & item medatadata shortcuts
 COST_PER_PULL = SCOUT_CONFIG["cost_per_pull"]
 WEIGHTS = SCOUT_CONFIG["rarity_weights"]
 TOTAL_WEIGHT = sum(WEIGHTS.values()) or 1
+
+COIN_NAME = ITEM_METADATA["coins"]["name"]
+COIN_EMOJI = ITEM_METADATA["coins"]["emoji"]
+VOUCHER_NAME = ITEM_METADATA["vouchers"]["name"]
+VOUCHER_EMOJI = ITEM_METADATA["vouchers"]["emoji"]
 
 def attach_scout_status_field(embed: discord.Embed, card_data: dict):
     """Helper to append gacha pull status to a card embed."""
@@ -25,10 +30,9 @@ def attach_scout_status_field(embed: discord.Embed, card_data: dict):
         )
     elif status == "OVERFLOW":
         count = card_data.get("vouchers", 1)
-        label = "Drink Voucher" if count == 1 else "Drink Vouchers"
         embed.add_field(
             name="Status",
-            value=f"🎟️ Max Resonance (+{count} {label})",
+            value=f"{VOUCHER_EMOJI} Max Resonance (+{count} {VOUCHER_NAME})",
             inline=False,
         )
 
@@ -127,15 +131,15 @@ class ScoutScreenView(discord.ui.View):
             title="🔍 Player Scouting",
             description=(
                 "Scout elite players across schools to build your dream lineup!\n\n"
-                f"• 1x Scout: 🪙 **{COST_PER_PULL:,}**\n"
-                f"• 10x Scout: 🪙 **{cost_10x:,}**\n\n"
+                f"• 1x Scout: {COIN_EMOJI} **{COST_PER_PULL:,}**\n"
+                f"• 10x Scout: {COIN_EMOJI} **{cost_10x:,}**\n\n"
                 f"📊 **Drop Rates:** {rates_str}"
             ),
             color=discord.Color.gold(),
         )
         if banner_file:
             embed.set_image(url=f"attachment://{banner_file.filename}")
-        embed.set_footer(text=f"Balance: 🪙 {format_number(inventory.scout_coins)}")
+        embed.set_footer(text=f"Balance: {COIN_EMOJI} {format_number(inventory.scout_coins)}")
         return embed
 
     async def update_screen(self, interaction: discord.Interaction):
@@ -168,9 +172,9 @@ class ScoutScreenView(discord.ui.View):
             embed = discord.Embed(
                 title="❌ Scout Failed",
                 description=(
-                    f"You don't have enough Scout Coins!\n\n"
-                    f"• Required: 🪙 **{cost}**\n"
-                    f"• Your Balance: 🪙 **{inventory.scout_coins}**"
+                    f"You don't have enough {COIN_NAME}!\n\n"
+                    f"• Required: {COIN_EMOJI} **{cost}**\n"
+                    f"• Your Balance: {COIN_EMOJI} **{inventory.scout_coins}**"
                 ),
                 color=discord.Color.gold(),
             )
@@ -210,7 +214,7 @@ class ScoutScreenView(discord.ui.View):
                     res_str = format_resonance_badge(c.get('new_resonance', 0))
                     status_tag = f" `{res_str}`"
                 elif c["status"] == "OVERFLOW":
-                    status_tag = f" `+{c['drink_vouchers']}🎟️`"
+                    status_tag = f" `+{c['drink_vouchers']}{VOUCHER_EMOJI}`"
 
                 line = f"`{idx:02d}.` **[{c['position']}]** {c['name']} *({c['rarity']})*{status_tag}"
                 results_formatted.append(line)
@@ -223,7 +227,7 @@ class ScoutScreenView(discord.ui.View):
                             "\n\n👇 Select a player from the dropdown below to view details!",
                 color=discord.Color.gold(),
             )
-            summary_embed.set_footer(text=f"Balance: 🪙 {format_number(new_balance)}")
+            summary_embed.set_footer(text=f"Balance: {COIN_EMOJI} {format_number(new_balance)}")
 
             self.pulled_cards = pulled_cards
             self.summary_embed = summary_embed
@@ -235,7 +239,7 @@ class ScoutScreenView(discord.ui.View):
         if self.selected_card_data:
             embed = create_card_embed(self.selected_card_data, show_level_info=False)
             attach_scout_status_field(embed, self.selected_card_data)
-            embed.set_footer(text=f"Balance: 🪙 {format_number(self.balance)}")
+            embed.set_footer(text=f"Balance: {COIN_EMOJI} {format_number(self.balance)}")
             image_file = get_card_image_file(self.selected_card_data)
             attachments = [image_file] if image_file else []
             return embed, attachments
