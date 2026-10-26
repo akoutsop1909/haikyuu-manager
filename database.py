@@ -15,7 +15,7 @@ from engine.game_logic import calculate_card_stats, get_single_level_cost, calcu
 from engine.data_loader import (
     CARDS_BY_ID, CARDS_BY_RARITY, BIRTHDAYS_BY_DATE,
     STARTER_PACK, DAILY_REWARD, BIRTHDAY_REWARD, SCOUT_CONFIG,
-    TRAINING_CONFIG, TOKYO_TRIP_CONFIG, ADMIN_PACK
+    TRAINING_CONFIG, TOKYO_TRIP_CONFIG, ADMIN_PACK, ALL_SLOTS
 )
 
 # Connection pool setup
@@ -29,6 +29,7 @@ class DailyClaim(BaseModel):
     claimed: bool = False
     scout_coins: int = Field(default=0, ge=0)
     practice_balls: int = Field(default=0, ge=0)
+    match_passes: int = Field(default=0, ge=0)
     total_logins: int = Field(default=0, ge=0)
     next_reset: int
 
@@ -131,6 +132,23 @@ async def init_db_pool():
                 PRIMARY KEY (user_id, lineup_number)
             );
         """)
+
+        # Create Tokyo Trip Squads Table
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS user_tokyo_squads (
+                user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                squad_number INT NOT NULL,
+                squad_name TEXT DEFAULT 'Trip Squad',
+                        
+                slot_1 TEXT,
+                slot_2 TEXT,
+                slot_3 TEXT,
+                slot_4 TEXT,
+                slot_5 TEXT,
+
+                PRIMARY KEY (user_id, squad_number)
+            );
+         """)
 
 # ==============================================================================
 # 2. USER ACCOUNT MANAGEMENT
@@ -244,7 +262,6 @@ async def get_user_cards(user_id: int) -> list[dict]:
             SELECT card_id, level, resonance, is_on_trip, exhausted_until
             FROM user_cards
             WHERE user_id = $1
-            ORDER BY level DESC
             """,
             user_id
         )
@@ -272,6 +289,12 @@ async def get_user_cards(user_id: int) -> list[dict]:
             )
             user_cards.append(card_info)
 
+    # Define rarity weights for sorting (higher number = higher priority)
+    rarity_weights = {"SSR": 3, "SR": 2, "R": 1}
+
+    # Sort in Python: Highest level first, then highest rarity weight first
+    user_cards.sort(key=lambda card: (card["level"], rarity_weights.get(card["rarity"], 0)), reverse=True)
+
     return user_cards
 
 
@@ -279,7 +302,12 @@ async def claim_daily(user_id: int) -> DailyClaim:
     claimed = False
     scout_coins = 0
     practice_balls = 0
+    match_passes_gained = 0
     total_logins = 0
+
+    # Pull configuration settings dynamically
+    passes_reward = DAILY_REWARD["match_passes"]
+    max_cap = DAILY_REWARD["match_passes_cap"]
 
     async with pool.acquire() as conn:
         async with conn.transaction():
@@ -295,20 +323,25 @@ async def claim_daily(user_id: int) -> DailyClaim:
             db_now = row_time["db_now"]
             next_reset_timestamp = int(row_time["next_reset_ts"])
 
-            # Fetch user's last claim
+            # Fetch user's last claim and current match passes
             row = await conn.fetchrow(
-                "SELECT last_daily_claim, total_logins FROM users WHERE user_id = $1",
+                "SELECT last_daily_claim, total_logins, match_passes FROM users WHERE user_id = $1",
                 user_id
             )
 
             if row:
-                last_claim, total_logins = row["last_daily_claim"], row["total_logins"] or 0
+                last_claim, total_logins, current_passes = row["last_daily_claim"], row["total_logins"] or 0, row["match_passes"] or 0
 
                 can_claim = True if last_claim is None else db_now.date() > last_claim.date()
 
                 if can_claim:
                     scout_coins = DAILY_REWARD["scout_coins"]
                     practice_balls = DAILY_REWARD["practice_balls"]
+
+                    # Calculate how many passes are actually added respecting the config cap
+                    target_passes = min(max_cap, current_passes + passes_reward)
+                    match_passes_gained = target_passes - current_passes
+
                     total_logins += 1
                     claimed = True
 
@@ -316,19 +349,20 @@ async def claim_daily(user_id: int) -> DailyClaim:
                         UPDATE users 
                         SET scout_coins = scout_coins + $1,
                             practice_balls = practice_balls + $2,
+                            match_passes = LEAST($3, match_passes + $4),
                             total_logins = total_logins + 1,
-                            last_daily_claim = $3
-                        WHERE user_id = $4
-                    """, scout_coins, practice_balls, db_now, user_id)
+                            last_daily_claim = $5
+                        WHERE user_id = $6
+                    """, scout_coins, practice_balls, max_cap, passes_reward, db_now, user_id)
 
     return DailyClaim(
         claimed=claimed,
         scout_coins=scout_coins,
         practice_balls=practice_balls,
+        match_passes=match_passes_gained,
         total_logins=total_logins,
         next_reset=next_reset_timestamp,
     )
-
 
 async def claim_birthday(user_id: int) -> BirthdayClaim:
     total_coins = 0
@@ -661,16 +695,12 @@ async def add_to_lineup(user_id: int, lineup_number: int, slot_name: str, card_i
     """Assigns a card to any specified lineup slot, clearing it from any other slot in the same lineup."""
 
     # 1. Whitelist valid slot columns to prevent SQL injection
-    valid_slots = {
-        "setter", "opposite", "wing_spiker_1", "wing_spiker_2",
-        "middle_blocker_1", "middle_blocker_2", "libero", "pinch_server"
-    }
-    if slot_name not in valid_slots:
+    if slot_name not in ALL_SLOTS:
         raise ValueError(f"Invalid slot name: {slot_name}")
 
     # 2. Dynamically build SET clauses to prevent duplicate column assignments
     set_clauses = []
-    for col in valid_slots:
+    for col in ALL_SLOTS:
         if col == slot_name:
             set_clauses.append(f"{col} = $3")
         else:
@@ -693,6 +723,78 @@ async def add_to_lineup(user_id: int, lineup_number: int, slot_name: str, card_i
 # ==============================================================================
 # 6. TOKYO TRIP
 # ==============================================================================
+async def get_trip_squads(user_id: int) -> dict[int, dict]:
+    """Fetches all saved Tokyo trip squads for a user."""
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT *
+            FROM user_tokyo_squads
+            WHERE user_id = $1
+            ORDER BY squad_number ASC
+            """,
+            user_id
+        )
+        return {row["squad_number"]: dict(row) for row in rows}
+
+
+async def clear_trip_squad(user_id: int, squad_number: int):
+    """Clears all slots for a specific Tokyo trip squad dynamically based on config."""
+    max_players = TOKYO_TRIP_CONFIG["max_players"]
+    set_clause = ", ".join([f"slot_{i} = NULL" for i in range(1, max_players + 1)])
+
+    async with pool.acquire() as conn:
+        await conn.execute(
+            f"""
+            UPDATE user_tokyo_squads 
+            SET {set_clause}
+            WHERE user_id = $1 AND squad_number = $2
+            """,
+            user_id, squad_number
+        )
+
+
+async def add_to_trip_squad(user_id: int, squad_number: int, slot_name: str, slot_id: str):
+    """Assigns a card to a Tokyo squad slot, inserting the squad row if it doesn't exist yet."""
+    max_players = TOKYO_TRIP_CONFIG["max_players"]
+    valid_slots = {f"slot_{i}" for i in range(1, max_players + 1)}
+
+    if slot_name not in valid_slots:
+        raise ValueError(f"Invalid slot name: {slot_name}")
+
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            # Ensure the squad row exists for this user and squad number
+            await conn.execute(
+                """
+                INSERT INTO user_tokyo_squads (user_id, squad_number, squad_name)
+                VALUES ($1, $2, $3)
+                ON CONFLICT (user_id, squad_number) DO NOTHING
+                """,
+                user_id, squad_number, f"Squad {squad_number}"
+            )
+
+            # Clear this card from any other slot within the same squad first (prevents duplicates in same squad)
+            set_null_clauses = ", ".join([f"{col} = CASE WHEN {col} = $3 THEN NULL ELSE {col} END" for col in valid_slots])
+            await conn.execute(
+                f"""
+                UPDATE user_tokyo_squads
+                SET {set_null_clauses}
+                WHERE user_id = $1 AND squad_number = $2
+                """,
+                user_id, squad_number, slot_id
+            )
+
+            # Assign the card to the target slot
+            await conn.execute(
+                f"""
+                UPDATE user_tokyo_squads
+                SET {slot_name} = $3
+                WHERE user_id = $1 AND squad_number = $2
+                """,
+                user_id, squad_number, slot_id
+            )
+
 async def get_tokyo_trip_start(user_id: int) -> datetime | None:
     """Fetches the Tokyo trip start timestamp for a user."""
     async with pool.acquire() as conn:
@@ -702,27 +804,37 @@ async def get_tokyo_trip_start(user_id: int) -> datetime | None:
         )
 
 
-async def start_tokyo_trip(user_id: int, card_ids: list[str]):
-    """Sets is_on_trip = TRUE for the specified cards and records the exact start timestamp."""
+async def start_tokyo_trip(user_id: int, squad_number: int):
+    """Sets is_on_trip = TRUE for the cards in the specified squad using max_players config."""
+    max_players = TOKYO_TRIP_CONFIG["max_players"]
+    slot_columns = ", ".join([f"slot_{i}" for i in range(1, max_players + 1)])
+
     async with pool.acquire() as conn:
         async with conn.transaction():
-            # Record the exact current timestamp for accurate hour tracking
+            row = await conn.fetchrow(
+                f"""
+                SELECT {slot_columns}
+                FROM user_tokyo_squads
+                WHERE user_id = $1 AND squad_number = $2
+                """,
+                user_id, squad_number
+            )
+
+            card_ids = [row[f"slot_{i}"] for i in range(1, max_players + 1) if row[f"slot_{i}"]]
+
             await conn.execute(
                 "UPDATE users SET tokyo_trip_start = NOW() WHERE user_id = $1",
                 user_id
             )
 
-            # Update the cards to be on trip
-            if card_ids:
-                await conn.execute(
-                    """
-                    UPDATE user_cards 
-                    SET is_on_trip = TRUE 
-                    WHERE user_id = $1 AND card_id = ANY($2::text[])
-                    """,
-                    user_id, card_ids
-                )
-
+            await conn.execute(
+                """
+                UPDATE user_cards 
+                SET is_on_trip = TRUE 
+                WHERE user_id = $1 AND card_id = ANY($2::text[])
+                """,
+                user_id, card_ids
+            )
 
 async def claim_tokyo_trip(user_id: int):
     """

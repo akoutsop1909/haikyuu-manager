@@ -3,7 +3,7 @@ from pathlib import Path
 import discord
 
 from engine.data_loader import CARDS_BY_ID, SPECIALTIES_BY_ID, BONDS_BY_ID, SYNERGIES_BY_ID, TEAM_CONFIG, ITEM_METADATA
-from engine.stat_boosts import apply_lineup_boosts
+from engine.mechanics_boosts import apply_lineup_boosts
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 ASSETS_DIR = PROJECT_ROOT / "assets"
@@ -439,7 +439,7 @@ class PositionFilterSelectMenu(discord.ui.Select):
 
         # Always include "All Positions" if there are cards
         options = [
-            discord.SelectOption(label="All Positions", value="ALL", default=(current_filter == "ALL"), emoji="🏐")
+            discord.SelectOption(label="All Positions", value="ALL", default=(current_filter == "ALL"), emoji="🗂️")
         ]
 
         # Add only positions that have at least one card

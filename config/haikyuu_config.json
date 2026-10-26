@@ -15,7 +15,9 @@
   },
   "DAILY_REWARD": {
     "scout_coins": 100,
-    "practice_balls": 1500
+    "practice_balls": 1500,
+    "match_passes": 5,
+    "match_passes_cap": 5
   },
   "BIRTHDAY_REWARD": {
     "base": {
@@ -83,13 +85,14 @@
     "min_synergy_players": 4
   },
   "TOKYO_TRIP": {
-    "min_s3_s4_owned": 17,
+    "min_r_sr_owned": 17,
     "allowed_rarities": [
       "R",
       "SR"
     ],
     "min_players": 1,
     "max_players": 5,
+    "max_squads": 3,
     "max_duration_hours": 12,
     "milestone_interval_hours": 3,
     "exhaustion_hours": 8,
