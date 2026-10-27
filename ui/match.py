@@ -3,10 +3,11 @@ import discord
 
 from ui.utils import lock_view_ui, format_lineup_court_display, create_card_embed, add_card_metadata_fields, \
     LineupSelectMenu, CardSelectMenu, BaseCardRosterView
-from engine.data_loader import STARTING_SLOTS, ALL_SLOTS
-from engine.stat_boosts import apply_lineup_boosts
+from engine.data_loader import TEAM_CONFIG, STARTING_SLOTS, ALL_SLOTS
+from engine.mechanics_boosts import apply_lineup_boosts
 from database import get_lineups, get_user_cards
 
+DEFAULT_LINEUP_NAME = TEAM_CONFIG["default_lineup_name_format"]
 
 class MatchScreenView(BaseCardRosterView):
     def __init__(self, user_id: int, user_cards: list[dict], lineups: dict[int, dict] = None,
@@ -66,7 +67,7 @@ class MatchScreenView(BaseCardRosterView):
 
     def _setup_components(self):
         filtered_cards, page_cards, max_pages, page_info = self._setup_pagination()
-        lineup_names_map = {i: data.get("lineup_name", f"Lineup {i}") for i, data in self.lineups.items()}
+        lineup_names_map = {i: data.get("lineup_name", DEFAULT_LINEUP_NAME.format(i)) for i, data in self.lineups.items()}
 
         # Row 0: Lineup Selector
         self.add_item(LineupSelectMenu(self.selected_lineup_index, lineup_names_map))

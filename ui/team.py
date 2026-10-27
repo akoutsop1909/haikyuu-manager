@@ -6,8 +6,10 @@ import discord
 
 from ui.utils import lock_view_ui, format_lineup_court_display, create_card_embed, add_card_metadata_fields, \
     LineupSelectMenu, PositionFilterSelectMenu, CardSelectMenu, BaseCardRosterView
-from engine.data_loader import ALL_SLOTS
+from engine.data_loader import TEAM_CONFIG, ALL_SLOTS
 from database import get_user_cards, get_lineups, clear_lineup, update_lineup_name, add_to_lineup, remove_pinch
+
+DEFAULT_LINEUP_NAME = TEAM_CONFIG["default_lineup_name_format"]
 
 class LineupRenameModal(discord.ui.Modal, title="Rename Lineup"):
     lineup_name = discord.ui.TextInput(
@@ -95,7 +97,7 @@ class TeamScreenView(BaseCardRosterView):
 
     def _setup_components(self):
         filtered_cards, page_cards, max_pages, page_info = self._setup_pagination()
-        lineup_names_map = {i: data.get("lineup_name", f"Lineup {i}") for i, data in self.lineups.items()}
+        lineup_names_map = {i: data.get("lineup_name", DEFAULT_LINEUP_NAME.format(i)) for i, data in self.lineups.items()}
 
         # Row 0: Lineup Selector
         self.add_item(LineupSelectMenu(self.selected_lineup_index, lineup_names_map))
@@ -213,7 +215,10 @@ class TeamScreenView(BaseCardRosterView):
             self.add_item(btn_cancel)
 
     async def update_screen(self, interaction: discord.Interaction):
-        self.lineups = await get_lineups(self.user_id)
+        self.user_cards, self.lineups = await asyncio.gather(
+            get_user_cards(self.user_id),
+            get_lineups(self.user_id)
+        )
         self._setup_components()
 
         content, embed, attachments = await self._get_screen_payload()

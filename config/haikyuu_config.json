@@ -82,7 +82,8 @@
   },
   "TEAM": {
     "max_lineups": 6,
-    "min_synergy_players": 4
+    "default_lineup_name_format": "Lineup {}",
+    "min_synergy_players": 4,
   },
   "TOKYO_TRIP": {
     "min_r_sr_owned": 17,
@@ -93,6 +94,7 @@
     "min_players": 1,
     "max_players": 5,
     "max_squads": 3,
+    "default_squad_name_format": "Trip Squad {}",
     "max_duration_hours": 12,
     "milestone_interval_hours": 3,
     "exhaustion_hours": 8,

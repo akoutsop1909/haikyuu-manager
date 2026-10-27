@@ -15,7 +15,7 @@ from engine.game_logic import calculate_card_stats, get_single_level_cost, calcu
 from engine.data_loader import (
     CARDS_BY_ID, CARDS_BY_RARITY, BIRTHDAYS_BY_DATE,
     STARTER_PACK, DAILY_REWARD, BIRTHDAY_REWARD, SCOUT_CONFIG,
-    TRAINING_CONFIG, TOKYO_TRIP_CONFIG, ADMIN_PACK, ALL_SLOTS
+    TEAM_CONFIG, TRAINING_CONFIG, TOKYO_TRIP_CONFIG, ADMIN_PACK, ALL_SLOTS
 )
 
 # Connection pool setup
@@ -113,9 +113,9 @@ async def init_db_pool():
             );
         """)
 
-        # Create Teams Table
+        # Create Team Lineups Table
         await conn.execute("""
-            CREATE TABLE IF NOT EXISTS user_teams (
+            CREATE TABLE IF NOT EXISTS user_team_lineups (
                 user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
                 lineup_number INT NOT NULL,
                 lineup_name TEXT DEFAULT 'Lineup',
@@ -135,7 +135,7 @@ async def init_db_pool():
 
         # Create Tokyo Trip Squads Table
         await conn.execute("""
-            CREATE TABLE IF NOT EXISTS user_tokyo_squads (
+            CREATE TABLE IF NOT EXISTS user_trip_squads (
                 user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
                 squad_number INT NOT NULL,
                 squad_name TEXT DEFAULT 'Trip Squad',
@@ -207,7 +207,7 @@ async def register_user(user_id: int) -> bool:
             # Insert Lineup 1 into Database
             await conn.execute(
                 """
-                INSERT INTO user_teams (
+                INSERT INTO user_team_lineups (
                     user_id, lineup_number, lineup_name, setter, opposite, 
                     wing_spiker_1, wing_spiker_2, middle_blocker_1, middle_blocker_2, libero, pinch_server
                 )
@@ -305,10 +305,6 @@ async def claim_daily(user_id: int) -> DailyClaim:
     match_passes_gained = 0
     total_logins = 0
 
-    # Pull configuration settings dynamically
-    passes_reward = DAILY_REWARD["match_passes"]
-    max_cap = DAILY_REWARD["match_passes_cap"]
-
     async with pool.acquire() as conn:
         async with conn.transaction():
             # Dynamically uses the PostgreSQL database's configured timezone
@@ -339,7 +335,7 @@ async def claim_daily(user_id: int) -> DailyClaim:
                     practice_balls = DAILY_REWARD["practice_balls"]
 
                     # Calculate how many passes are actually added respecting the config cap
-                    target_passes = min(max_cap, current_passes + passes_reward)
+                    target_passes = min(DAILY_REWARD["match_passes_cap"], current_passes + DAILY_REWARD["match_passes"])
                     match_passes_gained = target_passes - current_passes
 
                     total_logins += 1
@@ -353,7 +349,7 @@ async def claim_daily(user_id: int) -> DailyClaim:
                             total_logins = total_logins + 1,
                             last_daily_claim = $5
                         WHERE user_id = $6
-                    """, scout_coins, practice_balls, max_cap, passes_reward, db_now, user_id)
+                    """, scout_coins, practice_balls, DAILY_REWARD["match_passes_cap"], DAILY_REWARD["match_passes"], db_now, user_id)
 
     return DailyClaim(
         claimed=claimed,
@@ -458,15 +454,10 @@ async def claim_birthday(user_id: int) -> BirthdayClaim:
 # 4. SCOUT & TRAINING SYSTEMS
 # ==============================================================================
 async def perform_scout(user_id: int, scout_count: int) -> list[dict]:
-    cost_per_pull = SCOUT_CONFIG["cost_per_pull"]
-    max_res = SCOUT_CONFIG["max_resonance"]
-    voucher_rates = SCOUT_CONFIG["overflow_vouchers_by_rarity"]
+    cost = scout_count * SCOUT_CONFIG["cost_per_pull"]
 
-    cost = scout_count * cost_per_pull
-
-    rarity_weights = SCOUT_CONFIG["rarity_weights"]
-    rarities = list(rarity_weights.keys())
-    weights = list(rarity_weights.values())
+    rarities = list(SCOUT_CONFIG["rarity_weights"].keys())
+    weights = list(SCOUT_CONFIG["rarity_weights"].values())
 
     async with pool.acquire() as conn:
         async with conn.transaction():
@@ -499,7 +490,7 @@ async def perform_scout(user_id: int, scout_count: int) -> list[dict]:
 
                 if cid in owned_cards:
                     current_res = owned_cards[cid]
-                    if current_res < max_res:
+                    if current_res < SCOUT_CONFIG["max_resonance"]:
                         new_res = current_res + 1
                         await conn.execute("""
                             UPDATE user_cards 
@@ -510,7 +501,7 @@ async def perform_scout(user_id: int, scout_count: int) -> list[dict]:
                         card_info["status"] = "DUPLICATE"
                         card_info["new_resonance"] = new_res
                     else:
-                        drink_vouchers = voucher_rates.get(rarity, 1)
+                        drink_vouchers = SCOUT_CONFIG["overflow_vouchers_by_rarity"].get(rarity, 1)
                         overflow_vouchers_earned += drink_vouchers
                         card_info["status"] = "OVERFLOW"
                         card_info["drink_vouchers"] = drink_vouchers
@@ -538,7 +529,6 @@ async def perform_scout(user_id: int, scout_count: int) -> list[dict]:
 
 async def train_card(user_id: int, card_id: str, levels_to_add: int = 1, max_mode: bool = False):
     """Calculates and applies level upgrades using Practice Balls based on TRAINING_CONFIG."""
-    max_lvl = TRAINING_CONFIG["max_level"]
     card_meta = CARDS_BY_ID.get(card_id)
     rarity = card_meta["rarity"]
 
@@ -554,13 +544,13 @@ async def train_card(user_id: int, card_id: str, levels_to_add: int = 1, max_mod
                 user_id, card_id
             )
 
-            target_levels = max_lvl - current_level if max_mode else levels_to_add
+            target_levels = TRAINING_CONFIG["max_level"] - current_level if max_mode else levels_to_add
             levels_gained = 0
             total_cost = 0
 
             for _ in range(target_levels):
                 next_lvl = current_level + levels_gained
-                if next_lvl >= max_lvl:
+                if next_lvl >= TRAINING_CONFIG["max_level"]:
                     break
 
                 cost = get_single_level_cost(next_lvl, rarity)
@@ -586,8 +576,7 @@ async def train_card(user_id: int, card_id: str, levels_to_add: int = 1, max_mod
 async def increase_resonance(user_id: int, card_id: str):
     card_meta = CARDS_BY_ID.get(card_id)
     rarity = card_meta["rarity"]
-    costs = TRAINING_CONFIG.get("resonance_drink_cost_by_rarity", {"R": 1, "SR": 3, "SSR": 5})
-    drink_cost = costs.get(rarity, 1)
+    drink_cost = TRAINING_CONFIG["resonance_drink_cost_by_rarity"].get(rarity, 1)
 
     async with pool.acquire() as conn:
         async with conn.transaction():
@@ -607,8 +596,6 @@ async def increase_resonance(user_id: int, card_id: str):
 
 async def redeem_drink(user_id: int):
     """Redeems 1 Sports Drink using drink vouchers. Returns True on success."""
-    craft_cost = TRAINING_CONFIG["drink_craft_cost"]
-
     async with pool.acquire() as conn:
         async with conn.transaction():
             await conn.fetchval(
@@ -622,7 +609,7 @@ async def redeem_drink(user_id: int):
                     sports_drinks = sports_drinks + 1
                 WHERE user_id = $2
                 """,
-                craft_cost, user_id
+                TRAINING_CONFIG["drink_craft_cost"], user_id
             )
 
 # ==============================================================================
@@ -634,7 +621,7 @@ async def get_lineups(user_id: int) -> dict[int, dict]:
         rows = await conn.fetch(
             """
             SELECT *
-            FROM user_teams
+            FROM user_team_lineups
             WHERE user_id = $1
             ORDER BY lineup_number ASC
             """,
@@ -649,7 +636,7 @@ async def update_lineup_name(user_id: int, lineup_number: int, lineup_name: str)
     async with pool.acquire() as conn:
         await conn.execute(
             """
-            INSERT INTO user_teams (user_id, lineup_number, lineup_name)
+            INSERT INTO user_team_lineups (user_id, lineup_number, lineup_name)
             VALUES ($1, $2, $3)
             ON CONFLICT (user_id, lineup_number) 
             DO UPDATE SET lineup_name = EXCLUDED.lineup_name
@@ -663,7 +650,7 @@ async def clear_lineup(user_id: int, lineup_number: int):
     async with pool.acquire() as conn:
         await conn.execute(
             """
-            UPDATE user_teams 
+            UPDATE user_team_lineups 
             SET setter = NULL, 
                 opposite = NULL, 
                 wing_spiker_1 = NULL, 
@@ -683,7 +670,7 @@ async def remove_pinch(user_id: int, lineup_number: int):
     async with pool.acquire() as conn:
         await conn.execute(
             """
-            UPDATE user_teams 
+            UPDATE user_team_lineups 
             SET pinch_server = NULL 
             WHERE user_id = $1 AND lineup_number = $2
             """,
@@ -707,17 +694,16 @@ async def add_to_lineup(user_id: int, lineup_number: int, slot_name: str, card_i
             set_clauses.append(f"{col} = CASE WHEN t.{col} = $3 THEN NULL ELSE t.{col} END")
 
     set_sql = ", ".join(set_clauses)
-    default_name = f"Lineup {lineup_number}"
 
     async with pool.acquire() as conn:
         await conn.execute(
             f"""
-            INSERT INTO user_teams AS t (user_id, lineup_number, lineup_name, {slot_name})
+            INSERT INTO user_team_lineups AS t (user_id, lineup_number, lineup_name, {slot_name})
             VALUES ($1, $2, $4, $3)
             ON CONFLICT (user_id, lineup_number) 
             DO UPDATE SET {set_sql}
             """,
-            user_id, lineup_number, card_id, default_name
+            user_id, lineup_number, card_id, TEAM_CONFIG["default_lineup_name_format"].format(lineup_number)
         )
 
 # ==============================================================================
@@ -729,7 +715,7 @@ async def get_trip_squads(user_id: int) -> dict[int, dict]:
         rows = await conn.fetch(
             """
             SELECT *
-            FROM user_tokyo_squads
+            FROM user_trip_squads
             WHERE user_id = $1
             ORDER BY squad_number ASC
             """,
@@ -740,13 +726,12 @@ async def get_trip_squads(user_id: int) -> dict[int, dict]:
 
 async def clear_trip_squad(user_id: int, squad_number: int):
     """Clears all slots for a specific Tokyo trip squad dynamically based on config."""
-    max_players = TOKYO_TRIP_CONFIG["max_players"]
-    set_clause = ", ".join([f"slot_{i} = NULL" for i in range(1, max_players + 1)])
+    set_clause = ", ".join([f"slot_{i} = NULL" for i in range(1, TOKYO_TRIP_CONFIG["max_players"] + 1)])
 
     async with pool.acquire() as conn:
         await conn.execute(
             f"""
-            UPDATE user_tokyo_squads 
+            UPDATE user_trip_squads 
             SET {set_clause}
             WHERE user_id = $1 AND squad_number = $2
             """,
@@ -756,8 +741,7 @@ async def clear_trip_squad(user_id: int, squad_number: int):
 
 async def add_to_trip_squad(user_id: int, squad_number: int, slot_name: str, slot_id: str):
     """Assigns a card to a Tokyo squad slot, inserting the squad row if it doesn't exist yet."""
-    max_players = TOKYO_TRIP_CONFIG["max_players"]
-    valid_slots = {f"slot_{i}" for i in range(1, max_players + 1)}
+    valid_slots = {f"slot_{i}" for i in range(1, TOKYO_TRIP_CONFIG["max_players"] + 1)}
 
     if slot_name not in valid_slots:
         raise ValueError(f"Invalid slot name: {slot_name}")
@@ -767,18 +751,18 @@ async def add_to_trip_squad(user_id: int, squad_number: int, slot_name: str, slo
             # Ensure the squad row exists for this user and squad number
             await conn.execute(
                 """
-                INSERT INTO user_tokyo_squads (user_id, squad_number, squad_name)
+                INSERT INTO user_trip_squads (user_id, squad_number, squad_name)
                 VALUES ($1, $2, $3)
                 ON CONFLICT (user_id, squad_number) DO NOTHING
                 """,
-                user_id, squad_number, f"Squad {squad_number}"
+                user_id, squad_number, TOKYO_TRIP_CONFIG["default_squad_name_format"].format(squad_number)
             )
 
             # Clear this card from any other slot within the same squad first (prevents duplicates in same squad)
             set_null_clauses = ", ".join([f"{col} = CASE WHEN {col} = $3 THEN NULL ELSE {col} END" for col in valid_slots])
             await conn.execute(
                 f"""
-                UPDATE user_tokyo_squads
+                UPDATE user_trip_squads
                 SET {set_null_clauses}
                 WHERE user_id = $1 AND squad_number = $2
                 """,
@@ -788,7 +772,7 @@ async def add_to_trip_squad(user_id: int, squad_number: int, slot_name: str, slo
             # Assign the card to the target slot
             await conn.execute(
                 f"""
-                UPDATE user_tokyo_squads
+                UPDATE user_trip_squads
                 SET {slot_name} = $3
                 WHERE user_id = $1 AND squad_number = $2
                 """,
@@ -806,21 +790,20 @@ async def get_tokyo_trip_start(user_id: int) -> datetime | None:
 
 async def start_tokyo_trip(user_id: int, squad_number: int):
     """Sets is_on_trip = TRUE for the cards in the specified squad using max_players config."""
-    max_players = TOKYO_TRIP_CONFIG["max_players"]
-    slot_columns = ", ".join([f"slot_{i}" for i in range(1, max_players + 1)])
+    slot_columns = ", ".join([f"slot_{i}" for i in range(1, TOKYO_TRIP_CONFIG["max_players"] + 1)])
 
     async with pool.acquire() as conn:
         async with conn.transaction():
             row = await conn.fetchrow(
                 f"""
                 SELECT {slot_columns}
-                FROM user_tokyo_squads
+                FROM user_trip_squads
                 WHERE user_id = $1 AND squad_number = $2
                 """,
                 user_id, squad_number
             )
 
-            card_ids = [row[f"slot_{i}"] for i in range(1, max_players + 1) if row[f"slot_{i}"]]
+            card_ids = [row[f"slot_{i}"] for i in range(1, TOKYO_TRIP_CONFIG["max_players"] + 1) if row[f"slot_{i}"]]
 
             await conn.execute(
                 "UPDATE users SET tokyo_trip_start = NOW() WHERE user_id = $1",
@@ -837,12 +820,7 @@ async def start_tokyo_trip(user_id: int, squad_number: int):
             )
 
 async def claim_tokyo_trip(user_id: int):
-    """
-    Ends the Tokyo trip using the centralized calculation function from game_logic.
-    """
-    config = TOKYO_TRIP_CONFIG
-    exhaustion_hours = config["exhaustion_hours"]
-
+    """Ends the Tokyo trip using the centralized calculation function from game_logic."""
     async with pool.acquire() as conn:
         async with conn.transaction():
             # 1. Fetch trip start time
@@ -891,7 +869,7 @@ async def claim_tokyo_trip(user_id: int):
                     exhausted_until = NOW() + INTERVAL '1 hour' * $2
                 WHERE user_id = $1 AND is_on_trip = TRUE
                 """,
-                user_id, exhaustion_hours
+                user_id, TOKYO_TRIP_CONFIG["exhaustion_hours"]
             )
 
 # ==============================================================================
@@ -899,10 +877,7 @@ async def claim_tokyo_trip(user_id: int):
 # ==============================================================================
 async def boost_admin_account(user_id: int) -> bool:
     """
-    Registers an admin with the Starter Pack first if missing,
-    then grants them +1 ADMIN_PACK to their balance.
-
-    Returns True if a new account was created, False if existing.
+    Registers an admin with the Starter Pack first if missing, then grants them +1 ADMIN_PACK to their balance.
     """
     is_new = not await user_exists(user_id)
 

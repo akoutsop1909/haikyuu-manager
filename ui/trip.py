@@ -13,6 +13,7 @@ from database import get_user_cards, get_lineups, get_trip_squads, add_to_trip_s
 TOKYO_TRIP_MIN_OWNED = TOKYO_TRIP_CONFIG["min_r_sr_owned"]
 TOKYO_TRIP_MAX_PLAYERS = TOKYO_TRIP_CONFIG["max_players"]
 TOKYO_TRIP_MAX_SQUADS = TOKYO_TRIP_CONFIG["max_squads"]
+DEFAULT_SQUAD_NAME = TOKYO_TRIP_CONFIG["default_squad_name_format"]
 ALLOWED_RARITIES = tuple(TOKYO_TRIP_CONFIG.get("allowed_rarities", ["R", "SR"]))
 RARITY_LABEL = "/".join(ALLOWED_RARITIES)
 REWARDS_CONFIG = TOKYO_TRIP_CONFIG.get("rewards_by_rarity", {})
@@ -37,7 +38,7 @@ class TokyoSquadSelectMenu(discord.ui.Select):
         options = []
 
         for i in range(1, TOKYO_TRIP_MAX_SQUADS + 1):
-            name = squad_names.get(i, f"Squad {i}")
+            name = squad_names.get(i, DEFAULT_SQUAD_NAME.format(i))
             options.append(
                 discord.SelectOption(
                     label=name,
@@ -53,6 +54,7 @@ class TokyoSquadSelectMenu(discord.ui.Select):
         view = self.view
         await lock_view_ui(view, interaction)
         view.current_squad_number = int(self.values[0])
+        view.is_clearing_squad_confirmation = False
         await view.update_screen(interaction)
 
 class TripScreenView(BaseCardRosterView):
@@ -73,6 +75,7 @@ class TripScreenView(BaseCardRosterView):
         self.current_squad_number = 1
         self.is_slot_selection_mode = False  # Track whether we are in the slot picker screen
         self.is_clearing_confirmation = False  # Track early claim confirmation state
+        self.is_clearing_squad_confirmation = False  # Track squad clear confirmation state
         self._setup_components()
 
     @classmethod
@@ -103,8 +106,7 @@ class TripScreenView(BaseCardRosterView):
             return None
 
         info = self._get_squad_validation_info()
-        squad_data = self.trip_squads.get(self.current_squad_number, {})
-        squad_name = squad_data.get("squad_name", f"Squad {self.current_squad_number}")
+        squad_name = self._get_current_squad_name()
 
         squad_str = f"🚌 **Tokyo Training Camp ({squad_name})**\n" + "\n".join(info["slot_lines"])
 
@@ -122,9 +124,9 @@ class TripScreenView(BaseCardRosterView):
         reward_preview = (
             f"\n\n**Trip Rules & Rewards:**\n"
             f"• Rewards per Rarity:\n"
-            f"  ▫️ R: +{R_R['scout_coins']} {COIN_EMOJI} | +{R_R['practice_balls']} {BALL_EMOJI}\n"
-            f"  ▫️ SR: +{SR_R['scout_coins']} {COIN_EMOJI} | +{SR_R['practice_balls']} {BALL_EMOJI}\n"
-            f"• Rewards (every {INTERVAL_HOURS}h, max {rewards.max_milestones}): +{rewards.coins_per_milestone:,} {COIN_EMOJI} | +{rewards.balls_per_milestone:,} {BALL_EMOJI}\n"
+            f"  ▫️ R: +{R_R['scout_coins']} {COIN_EMOJI}   +{R_R['practice_balls']} {BALL_EMOJI}\n"
+            f"  ▫️ SR: +{SR_R['scout_coins']} {COIN_EMOJI}   +{SR_R['practice_balls']} {BALL_EMOJI}\n"
+            f"• Rewards (every {INTERVAL_HOURS}h, max {rewards.max_milestones}): +{rewards.coins_per_milestone:,} {COIN_EMOJI}   +{rewards.balls_per_milestone:,} {BALL_EMOJI}\n"
             f"• Max Duration Bonus ({MAX_DURATION_HOURS}h): +{MAX_DURATION_BONUS_VOUCHERS} {VOUCHER_EMOJI}\n"
             f"• Exhaustion: {EXHAUSTION_HOURS}h upon claim\n"
             f"*(Note: Lineup and exhausted players are hidden)*"
@@ -137,6 +139,7 @@ class TripScreenView(BaseCardRosterView):
         # State 1: Active Trip
         if self.is_active_trip:
             rewards = calculate_tokyo_trip_rewards(self.trip_start, self.user_cards)
+            squad_name = self._get_current_squad_name()
 
             player_lines = [
                 f"• {c['name']} ({c['rarity']})"
@@ -145,7 +148,7 @@ class TripScreenView(BaseCardRosterView):
             players_list_str = "\n".join(player_lines)
 
             embed = discord.Embed(
-                title="🚌 Tokyo Training Camp - Active Squad",
+                title=f"🚌 Tokyo Training Camp - {squad_name}",
                 description="Your squad is currently training hard in Tokyo!"
             )
             embed.add_field(
@@ -153,7 +156,6 @@ class TripScreenView(BaseCardRosterView):
                 value=players_list_str,
                 inline=False
             )
-
             # Check if max duration has been reached
             is_max_duration = rewards.max_duration_ts is None
 
@@ -267,7 +269,7 @@ class TripScreenView(BaseCardRosterView):
         # State 5: Normal Squad Building UI
         filtered_cards, page_cards, max_pages, page_info = self._setup_pagination()
 
-        squad_names_map = {num: data.get("squad_name", f"Squad {num}") for num, data in self.trip_squads.items()}
+        squad_names_map = {num: data.get("squad_name", DEFAULT_SQUAD_NAME.format(num)) for num, data in self.trip_squads.items()}
 
         # Row 0: Tokyo Squad Dropdown
         self.add_item(TokyoSquadSelectMenu(self.current_squad_number, squad_names_map))
@@ -286,38 +288,51 @@ class TripScreenView(BaseCardRosterView):
         is_send_disabled = is_squad_empty or info["has_exhausted"] or info["has_lineup_conflict"]
 
         if not self.is_slot_selection_mode:
-            # Row 3: Action Buttons
-            btn_add = discord.ui.Button(label="Edit", style=discord.ButtonStyle.primary, emoji="📋", row=3)
-            btn_clear = discord.ui.Button(
-                label="Clear", style=discord.ButtonStyle.secondary, emoji="🧹", row=3, disabled=is_squad_empty
-            )
-            btn_trip = discord.ui.Button(
-                label="Send", style=discord.ButtonStyle.success, emoji="🚌", row=3, disabled=is_send_disabled
-            )
+            if self.is_clearing_squad_confirmation:
+                # Row 3: Confirmation buttons for clearing the squad
+                btn_confirm = discord.ui.Button(label="Yes, Clear Squad", style=discord.ButtonStyle.danger, emoji="🗑️",
+                                                row=3)
+                btn_cancel_clear = discord.ui.Button(label="Cancel", style=discord.ButtonStyle.secondary, emoji="❌",
+                                                     row=3)
 
-            btn_add.callback = self._handle_enter_slot_selection
-            btn_clear.callback = self._handle_clear_players
-            btn_trip.callback = self._handle_trip
+                btn_confirm.callback = self._confirm_clear_squad_action
+                btn_cancel_clear.callback = self._cancel_clear_squad_action
 
-            self.add_item(btn_add)
-            self.add_item(btn_clear)
-            self.add_item(btn_trip)
+                self.add_item(btn_confirm)
+                self.add_item(btn_cancel_clear)
+                # Note: Row 4 navigation buttons are omitted during confirmation state!
+            else:
+                # Row 3: Action Buttons
+                btn_add = discord.ui.Button(label="Edit", style=discord.ButtonStyle.primary, emoji="📋", row=3)
+                btn_clear = discord.ui.Button(
+                    label="Clear", style=discord.ButtonStyle.danger, emoji="🗑️", row=3, disabled=is_squad_empty
+                )
+                btn_trip = discord.ui.Button(
+                    label="Send", style=discord.ButtonStyle.success, emoji="🚌", row=3, disabled=is_send_disabled
+                )
 
-            # Row 4: Navigation / Back Buttons
-            btn_prev = discord.ui.Button(label="Prev", style=discord.ButtonStyle.secondary, emoji="◀️", row=4,
-                                         disabled=(self.current_page == 0))
-            btn_next = discord.ui.Button(label="Next", style=discord.ButtonStyle.secondary, emoji="▶️", row=4,
-                                         disabled=(self.current_page >= max_pages - 1))
-            btn_back = discord.ui.Button(label="Back", style=discord.ButtonStyle.secondary, emoji="⬅️", row=4)
+                btn_add.callback = self._handle_enter_slot_selection
+                btn_clear.callback = self._handle_clear_players
+                btn_trip.callback = self._handle_trip
 
-            btn_prev.callback = self._handle_prev_page
-            btn_next.callback = self._handle_next_page
-            btn_back.callback = self._handle_back
+                self.add_item(btn_add)
+                self.add_item(btn_clear)
+                self.add_item(btn_trip)
 
-            self.add_item(btn_prev)
-            self.add_item(btn_next)
-            self.add_item(btn_back)
+                # Row 4: Navigation / Back Buttons (Only shown when not in clear confirmation)
+                btn_prev = discord.ui.Button(label="Prev", style=discord.ButtonStyle.secondary, emoji="◀️", row=4,
+                                             disabled=(self.current_page == 0))
+                btn_next = discord.ui.Button(label="Next", style=discord.ButtonStyle.secondary, emoji="▶️", row=4,
+                                             disabled=(self.current_page >= max_pages - 1))
+                btn_back = discord.ui.Button(label="Back", style=discord.ButtonStyle.secondary, emoji="⬅️", row=4)
 
+                btn_prev.callback = self._handle_prev_page
+                btn_next.callback = self._handle_next_page
+                btn_back.callback = self._handle_back
+
+                self.add_item(btn_prev)
+                self.add_item(btn_next)
+                self.add_item(btn_back)
 
         else:
             # Row 3: Slot Buttons 1 to 3
@@ -347,9 +362,6 @@ class TripScreenView(BaseCardRosterView):
             self.has_met_requirement = data["has_met_requirement"]
             self.assigned_card_ids = data.get("assigned_card_ids", set())
             self.trip_squads = data["trip_squads"]
-        else:
-            # Only hit DB for squads when doing local UI updates where fetch_db is False
-            self.trip_squads = await get_trip_squads(self.user_id)
 
         self._setup_components()
         content, embed, attachments = await self._get_screen_payload()
@@ -392,7 +404,7 @@ class TripScreenView(BaseCardRosterView):
             slot_key = f"slot_{slot_index}"
             await add_to_trip_squad(interaction.user.id, self.current_squad_number, slot_key, self.selected_card_id)
             self.is_slot_selection_mode = True
-            await self.update_screen(interaction)
+            await self.update_screen(interaction, fetch_db=True)
 
         return callback
 
@@ -403,7 +415,18 @@ class TripScreenView(BaseCardRosterView):
 
     async def _handle_clear_players(self, interaction: discord.Interaction):
         await lock_view_ui(self, interaction)
+        self.is_clearing_squad_confirmation = True
+        await self.update_screen(interaction)
+
+    async def _confirm_clear_squad_action(self, interaction: discord.Interaction):
+        await lock_view_ui(self, interaction)
         await clear_trip_squad(self.user_id, self.current_squad_number)
+        self.is_clearing_squad_confirmation = False
+        await self.update_screen(interaction, fetch_db=True)
+
+    async def _cancel_clear_squad_action(self, interaction: discord.Interaction):
+        await lock_view_ui(self, interaction)
+        self.is_clearing_squad_confirmation = False
         await self.update_screen(interaction)
 
     async def _handle_trip(self, interaction: discord.Interaction):
@@ -415,6 +438,11 @@ class TripScreenView(BaseCardRosterView):
     def _check_unlock_requirement(user_cards: list[dict]) -> tuple[bool, int]:
         total_owned = sum(1 for c in user_cards if c["rarity"] in ALLOWED_RARITIES)
         return total_owned >= TOKYO_TRIP_MIN_OWNED, total_owned
+
+    def _get_current_squad_name(self) -> str:
+        """Helper to get the current squad's name with proper fallback."""
+        squad_data = self.trip_squads.get(self.current_squad_number, {})
+        return squad_data.get("squad_name", DEFAULT_SQUAD_NAME.format(self.current_squad_number))
 
     @staticmethod
     async def _fetch_trip_data(user_id: int) -> dict:

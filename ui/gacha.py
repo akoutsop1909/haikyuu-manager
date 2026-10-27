@@ -28,22 +28,6 @@ class UserHomeView(discord.ui.View):
         birthday = await claim_birthday(interaction.user.id)
         inventory = await get_inventory(interaction.user.id)
 
-        daily_status = ""
-        if daily:
-            if daily.claimed:
-                daily_status = (
-                    f"\n\n**Daily Reward Claimed!**\n"
-                    f"+{daily.scout_coins:,} {COIN_EMOJI}   +{daily.practice_balls:,} {BALL_EMOJI}\n"
-                    f"📅 Days Played: {daily.total_logins}\n"
-                    f"⏳ Reset: <t:{daily.next_reset}:R>"
-                )
-            else:
-                daily_status = (
-                    f"\n\n**Daily Already Claimed**\n"
-                    f"📅 Days Played: {daily.total_logins}\n"
-                    f"⏳ Reset: <t:{daily.next_reset}:R>"
-                )
-
         if is_new_user:
             welcome_text = (
                 f"Welcome to the club, **{interaction.user.display_name}**! "
@@ -53,6 +37,20 @@ class UserHomeView(discord.ui.View):
             welcome_text = (
                 f"Welcome back to the gym, **{interaction.user.display_name}**! "
                 f"The team is counting on you today."
+            )
+
+        if daily.claimed:
+            daily_status = (
+                f"\n\n**Daily Reward Claimed!**\n"
+                f"+{daily.scout_coins:,} {COIN_EMOJI}   +{daily.practice_balls:,} {BALL_EMOJI}\n"
+                f"📅 Days Played: {daily.total_logins}\n"
+                f"⏳ Reset: <t:{daily.next_reset}:R>"
+            )
+        else:
+            daily_status = (
+                f"\n\n**Daily Already Claimed**\n"
+                f"📅 Days Played: {daily.total_logins}\n"
+                f"⏳ Reset: <t:{daily.next_reset}:R>"
             )
 
         embed = discord.Embed(

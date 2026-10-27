@@ -8,13 +8,14 @@
     "team_boost": { "stat": "spike", "ratio": 0.12 },
     "opponent_debuff": { "stat": "block", "percent": 0.10 }
   },
-  {
-    "id": "wall_breaker",
-    "name": "Wall Breaker",
-    "description": "Boosts team SPIKE by 10%. Reduces opponent RECEIVE by 15%.",
-    "type": "percentage_debuff",
-    "team_boost": { "stat": "spike", "percent": 0.10 },
-    "opponent_debuff": { "stat": "receive", "percent": 0.15 }
+ {
+    "id": "iron_fortress",
+    "name": "Iron Fortress",
+    "description": "Boosts team BLOCK by 12% of Setter's SET stat. Reduces opponent SPIKE by 10%.",
+    "type": "scaling_boost",
+    "source_stat": "set",
+    "team_boost": { "stat": "block", "ratio": 0.12 },
+    "opponent_debuff": { "stat": "spike", "percent": 0.10 }
   },
   {
     "id": "floor_control",
@@ -28,7 +29,7 @@
   {
     "id": "service_cannon",
     "name": "Service Cannon",
-    "description": "Boosts team SERVE by 15%. Reduces opponent Setter's SET stat by 15%.",
+    "description": "Boosts team SERVE by 15%. Reduces opponent SET by 15%.",
     "type": "rotation_disrupt",
     "team_boost": { "stat": "serve", "percent": 0.15 },
     "opponent_debuff": { "stat": "set", "percent": 0.15 }
