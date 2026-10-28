@@ -1,17 +1,18 @@
 [
   {
-    "id": "great_partner",
-    "name": "Great Partner",
+    "id": "unshakable_trust",
+    "name": "Unshakable Trust",
     "description": "Iwaizumi gains SPIKE equal to 10% of Oikawa's SET stat; Oikawa gains +10% SET.",
     "required_players": ["s_oikawa_ssr", "ws_iwaizumi_ssr"],
     "target_boosts": [
-      { "player_id": "ws_iwaizumi_ssr", "stat": "spike", "ratio_from_partner": { "partner_id": "s_oikawa_ssr", "stat": "set", "ratio": 0.10 } },
-      { "player_id": "s_oikawa_ssr", "stat": "set", "percent": 0.10 }
+      { "player_id": "s_oikawa_ssr", "stat": "set", "percent": 0.10 },
+      { "player_id": "ws_iwaizumi_ssr", "stat": "spike", "ratio_from_partner":
+      { "partner_id": "s_oikawa_ssr", "stat": "set", "ratio": 0.10 } }
     ]
   },
   {
-    "id": "seijoh_core",
-    "name": "Seijoh's Core",
+    "id": "pride_of_seijoh",
+    "name": "Pride of Seijoh",
     "description": "Oikawa gains +15% SERVE; Iwaizumi gains +15% RECEIVE; Matsukawa gains +15% SPIKE.",
     "required_players": ["s_oikawa_ssr", "ws_iwaizumi_ssr", "mb_matsukawa_sr"],
     "target_boosts": [
@@ -21,42 +22,44 @@
     ]
   },
   {
-    "id": "the_wolves",
-    "name": "The Wolves",
+    "id": "taming_the_mad_dog",
+    "name": "Taming the Mad Dog",
     "description": "Kyōtani gains SPIKE equal to 5% of Iwaizumi's SPIKE stat; Iwaizumi gains +10% SERVE.",
     "required_players": ["ws_iwaizumi_ssr", "op_kyotani_sr"],
     "target_boosts": [
-      { "player_id": "op_kyotani_sr", "stat": "spike", "ratio_from_partner": { "partner_id": "ws_iwaizumi_ssr", "stat": "spike", "ratio": 0.05 } },
-      { "player_id": "ws_iwaizumi_ssr", "stat": "serve", "percent": 0.10 }
+      { "player_id": "ws_iwaizumi_ssr", "stat": "serve", "percent": 0.10 },
+      { "player_id": "op_kyotani_sr", "stat": "spike", "ratio_from_partner":
+      { "partner_id": "ws_iwaizumi_ssr", "stat": "spike", "ratio": 0.05 } }
     ]
   },
   {
-    "id": "high_reach_quick",
-    "name": "High-Reach Quick",
-    "description": "Kindaichi gains SPIKE equal to 20% of Oikawa's SET stat.",
+    "id": "kitagawa_connection",
+    "name": "Kitagawa Connection",
+    "description": "Kindaichi gains SPIKE equal to 10% of Oikawa's SET stat.",
     "required_players": ["s_oikawa_ssr", "mb_kindaichi_sr"],
     "target_boosts": [
-      { "player_id": "mb_kindaichi_sr", "stat": "spike", "ratio_from_partner": { "partner_id": "s_oikawa_ssr", "stat": "set", "ratio": 0.20 } }
+      { "player_id": "mb_kindaichi_sr", "stat": "spike", "ratio_from_partner":
+      { "partner_id": "s_oikawa_ssr", "stat": "set", "ratio": 0.10 } }
     ]
   },
   {
-    "id": "cornered_prey",
-    "name": "Cornered Prey",
-    "description": "Matsukawa gains +10% BLOCK; Watari gains +10% RECEIVE.",
+    "id": "seijohs_shield",
+    "name": "Seijoh's Shield",
+    "description": "Matsukawa gains +10% BLOCK; Watari gains +8% RECEIVE.",
     "required_players": ["mb_matsukawa_sr", "l_watari_sr"],
     "target_boosts": [
       { "player_id": "mb_matsukawa_sr", "stat": "block", "percent": 0.10 },
-      { "player_id": "l_watari_sr", "stat": "receive", "percent": 0.10 }
+      { "player_id": "l_watari_sr", "stat": "receive", "percent": 0.08 }
     ]
   },
   {
-    "id": "backline_cover",
-    "name": "Backline Cover",
-    "description": "Hanamaki gains +10% RECEIVE; Watari gains +10% RECEIVE.",
+    "id": "seamless_support",
+    "name": "Seamless Support",
+    "description": "Hanamaki gains +10% RECEIVE; Watari gains +8% RECEIVE.",
     "required_players": ["ws_hanamaki_sr", "l_watari_sr"],
     "target_boosts": [
       { "player_id": "ws_hanamaki_sr", "stat": "receive", "percent": 0.10 },
-      { "player_id": "l_watari_sr", "stat": "receive", "percent": 0.10 }
+      { "player_id": "l_watari_sr", "stat": "receive", "percent": 0.08 }
     ]
   }
 ]

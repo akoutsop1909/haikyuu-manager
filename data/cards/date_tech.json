@@ -1,0 +1,184 @@
+[
+  {
+    "id": "mb_aone_ssr",
+    "name": "Takanobu Aone",
+    "school": "Date Tech",
+    "position": "MB",
+    "rarity": "SSR",
+    "birthday": "08-13",
+    "embed_color": "0x2E8B57",
+    "quote": "We will stop any attack. That is the Iron Wall's job.",
+    "image_file": "mb_aone_ssr.jpg",
+    "base_stats": {
+      "spike": 270,
+      "block": 410,
+      "receive": 150,
+      "set": 40,
+      "serve": 130
+    }
+  },
+  {
+    "id": "ws_futakuchi_ssr",
+    "name": "Kenji Futakuchi",
+    "school": "Date Tech",
+    "position": "WS",
+    "rarity": "SSR",
+    "birthday": "11-10",
+    "embed_color": "0x2E8B57",
+    "quote": "Don't worry, seniors. We've got this covered.",
+    "image_file": "ws_futakuchi_ssr.jpg",
+    "base_stats": {
+      "spike": 310,
+      "block": 240,
+      "receive": 170,
+      "set": 60,
+      "serve": 220
+    }
+  },
+  {
+    "id": "s_koganegawa_sr",
+    "name": "Kanji Koganegawa",
+    "school": "Date Tech",
+    "position": "S",
+    "rarity": "SR",
+    "specialty_id": "iron_fortress",
+    "birthday": "07-09",
+    "embed_color": "0x2E8B57",
+    "quote": "I'll toss it as high and hard as you want!",
+    "image_file": "s_koganegawa_sr.jpg",
+    "base_stats": {
+      "spike": 155,
+      "block": 180,
+      "receive": 100,
+      "set": 140,
+      "serve": 150
+    }
+  },
+  {
+    "id": "ws_obara_sr",
+    "name": "Yutaka Obara",
+    "school": "Date Tech",
+    "position": "WS",
+    "rarity": "SR",
+    "birthday": "12-15",
+    "embed_color": "0x2E8B57",
+    "quote": "I'll keep digging whatever comes my way.",
+    "image_file": "ws_obara_sr.jpg",
+    "base_stats": {
+      "spike": 215,
+      "block": 120,
+      "receive": 210,
+      "set": 50,
+      "serve": 130
+    }
+  },
+  {
+    "id": "op_onagawa_sr",
+    "name": "Tarō Onagawa",
+    "school": "Date Tech",
+    "position": "OP",
+    "rarity": "SR",
+    "birthday": "12-14",
+    "embed_color": "0x2E8B57",
+    "quote": "Even from the bench, I'm ready to step up when needed.",
+    "image_file": "op_onagawa_sr.jpg",
+    "base_stats": {
+      "spike": 230,
+      "block": 120,
+      "receive": 160,
+      "set": 55,
+      "serve": 160
+    }
+  },
+  {
+    "id": "mb_fukiage_sr",
+    "name": "Jingo Fukiage",
+    "school": "Date Tech",
+    "position": "MB",
+    "rarity": "SR",
+    "birthday": "02-14",
+    "embed_color": "0x2E8B57",
+    "quote": "I'll do my best to maintain the Iron Wall.",
+    "image_file": "mb_fukiage_sr.jpg",
+    "base_stats": {
+      "spike": 180,
+      "block": 270,
+      "receive": 110,
+      "set": 50,
+      "serve": 115
+    }
+  },
+  {
+    "id": "l_sakunami_sr",
+    "name": "Kōsuke Sakunami",
+    "school": "Date Tech",
+    "position": "L",
+    "rarity": "SR",
+    "birthday": "08-30",
+    "embed_color": "0x2E8B57",
+    "quote": "I'll make sure the ball reaches our setters safely!",
+    "image_file": "l_sakunami_sr.jpg",
+    "base_stats": {
+      "spike": 0,
+      "block": 0,
+      "receive": 260,
+      "set": 100,
+      "serve": 0
+    }
+  },
+  {
+    "id": "mb_kamasaki_r",
+    "name": "Yasushi Kamasaki",
+    "school": "Date Tech",
+    "position": "MB",
+    "rarity": "R",
+    "birthday": "11-08",
+    "embed_color": "0x2E8B57",
+    "quote": "Iron Wall! Let's crush their spikes right into the floor!",
+    "image_file": "mb_kamasaki_r.jpg",
+    "base_stats": {
+      "spike": 130,
+      "block": 210,
+      "receive": 80,
+      "set": 35,
+      "serve": 70
+    }
+  },
+  {
+    "id": "s_moniwa_r",
+    "name": "Kaname Moniwa",
+    "school": "Date Tech",
+    "position": "S",
+    "rarity": "R",
+    "specialty_id": "iron_fortress",
+    "birthday": "09-06",
+    "embed_color": "0x2E8B57",
+    "quote": "Guys, calm down and stick to our rhythm!",
+    "image_file": "s_moniwa_r.jpg",
+    "base_stats": {
+      "spike": 60,
+      "block": 70,
+      "receive": 115,
+      "set": 180,
+      "serve": 100
+    }
+  },
+  {
+    "id": "op_sasaya_r",
+    "name": "Takehito Sasaya",
+    "school": "Date Tech",
+    "position": "OP",
+    "rarity": "R",
+    "birthday": "02-10",
+    "embed_color": "0x2E8B57",
+    "quote": "As seniors, we have to lead by example on and off the court.",
+    "image_file": "op_sasaya_r.jpg",
+    "base_stats": {
+      "spike": 155,
+      "block": 90,
+      "receive": 135,
+      "set": 45,
+      "serve": 100
+    }
+  }
+]

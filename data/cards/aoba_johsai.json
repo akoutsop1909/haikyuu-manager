@@ -101,9 +101,9 @@
     "quote": "Get out of my way! I'm hitting it!",
     "image_file": "op_kyotani_sr.jpg",
     "base_stats": {
-      "spike": 285,
-      "block": 110,
-      "receive": 70,
+      "spike": 255,
+      "block": 120,
+      "receive": 90,
       "set": 40,
       "serve": 220
     }

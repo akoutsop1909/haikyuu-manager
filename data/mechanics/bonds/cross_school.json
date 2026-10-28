@@ -5,7 +5,8 @@
     "description": "Hinata gains SPIKE equal to 15% of Kenma's SET stat; Kenma gains +10% SET.",
     "required_players": ["mb_hinata_s4", "s_kenma_ssr"],
     "target_boosts": [
-      { "player_id": "mb_hinata_sr", "stat": "spike", "ratio_from_partner": { "partner_id": "s_kenma_ssr", "stat": "set", "ratio": 0.15 } },
+      { "player_id": "mb_hinata_sr", "stat": "spike", "ratio_from_partner":
+      { "partner_id": "s_kenma_ssr", "stat": "set", "ratio": 0.15 } },
       { "player_id": "s_kenma_ssr", "stat": "set", "percent": 0.10 }
     ]
   },
@@ -15,7 +16,8 @@
     "description": "Kindaichi gains SPIKE equal to 15% of Kageyama's SET stat; Kageyama gains +10% SET.",
     "required_players": ["s_kageyama_ssr", "mb_kindaichi_sr"],
     "target_boosts": [
-      { "player_id": "mb_kindaichi_sr", "stat": "spike", "ratio_from_partner": { "partner_id": "s_kageyama_ssr", "stat": "set", "ratio": 0.15 } },
+      { "player_id": "mb_kindaichi_sr", "stat": "spike", "ratio_from_partner":
+      { "partner_id": "s_kageyama_ssr", "stat": "set", "ratio": 0.15 } },
       { "player_id": "s_kageyama_ssr", "stat": "set", "percent": 0.10 }
     ]
   },
@@ -25,7 +27,8 @@
     "description": "Bokuto gains SPIKE equal to 10% of Kuroo's BLOCK; Tsukishima and Kuroo both gain +15% BLOCK.",
     "required_players": ["ws_bokuto_ssr", "mb_kuroo_ssr", "mb_tsukishima_sr"],
     "target_boosts": [
-      { "player_id": "ws_bokuto_ssr", "stat": "spike", "ratio_from_partner": { "partner_id": "mb_kuroo_ssr", "stat": "block", "ratio": 0.10 } },
+      { "player_id": "ws_bokuto_ssr", "stat": "spike", "ratio_from_partner":
+      { "partner_id": "mb_kuroo_ssr", "stat": "block", "ratio": 0.10 } },
       { "player_id": "mb_kuroo_ssr", "stat": "block", "percent": 0.15 },
       { "player_id": "mb_tsukishima_sr", "stat": "block", "percent": 0.15 }
     ]

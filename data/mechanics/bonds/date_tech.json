@@ -1,0 +1,66 @@
+[
+  {
+    "id": "new_iron_wall",
+    "name": "New Iron Wall",
+    "description": "Aone, Futakuchi, and Koganegawa all gain +15% BLOCK.",
+    "required_players": ["mb_aone_ssr", "ws_futakuchi_ssr", "s_koganegawa_sr"],
+    "target_boosts": [
+      { "player_id": "mb_aone_ssr", "stat": "block", "percent": 0.15 },
+      { "player_id": "ws_futakuchi_ssr", "stat": "block", "percent": 0.15 },
+      { "player_id": "s_koganegawa_sr", "stat": "block", "percent": 0.15 }
+    ]
+  },
+  {
+    "id": "cunning_and_colossal",
+    "name": "Cunning & Colossal",
+    "description": "Futakuchi gains SPIKE equal to 8% of Aone's BLOCK stat; Aone gains +10% SPIKE.",
+    "required_players": ["ws_futakuchi_ssr", "mb_aone_ssr"],
+    "target_boosts": [
+      { "player_id": "mb_aone_ssr", "stat": "spike", "percent": 0.10 },
+      { "player_id": "ws_futakuchi_ssr", "stat": "spike", "ratio_from_partner":
+      { "partner_id": "mb_aone_ssr", "stat": "block", "ratio": 0.08 } }
+    ]
+  },
+  {
+    "id": "inherited_iron",
+    "name": "Inherited Iron",
+    "description": "Futakuchi gains +10% SERVE; Fukiage gains +10% BLOCK.",
+    "required_players": ["ws_futakuchi_ssr", "mb_fukiage_sr"],
+    "target_boosts": [
+      { "player_id": "ws_futakuchi_ssr", "stat": "serve", "percent": 0.10 },
+      { "player_id": "mb_fukiage_sr", "stat": "block", "percent": 0.10 }
+    ]
+  },
+  {
+    "id": "the_dig_and_toss",
+    "name": "The Dig & Toss",
+    "description": "Koganegawa gains SET equal to 35% of Sakunami's RECEIVE stat; Sakunami gains +10% RECEIVE.",
+    "required_players": ["s_koganegawa_sr", "l_sakunami_sr"],
+    "target_boosts": [
+      { "player_id": "l_sakunami_sr", "stat": "receive", "percent": 0.10 },
+      { "player_id": "s_koganegawa_sr", "stat": "set", "ratio_from_partner":
+      { "partner_id": "l_sakunami_sr", "stat": "receive", "ratio": 0.35 } }
+    ]
+  },
+  {
+    "id": "steadfast_roots",
+    "name": "Steadfast Roots",
+    "description": "Obara gains +8% RECEIVE; Fukiage gains +10% BLOCK.",
+    "required_players": ["ws_obara_sr", "mb_fukiage_sr"],
+    "target_boosts": [
+      { "player_id": "ws_obara_sr", "stat": "receive", "percent": 0.08 },
+      { "player_id": "mb_fukiage_sr", "stat": "block", "percent": 0.10 }
+    ]
+  },
+  {
+    "id": "unyielding_wings",
+    "name": "Unyielding Wings",
+    "description": "Onagawa gains SPIKE equal to 10% of Obara's RECEIVE stat; Obara gains +8% RECEIVE.",
+    "required_players": ["ws_obara_sr", "op_onagawa_sr"],
+    "target_boosts": [
+      { "player_id": "ws_obara_sr", "stat": "receive", "percent": 0.08 },
+      { "player_id": "op_onagawa_sr", "stat": "spike", "ratio_from_partner":
+      { "partner_id": "ws_obara_sr", "stat": "receive", "ratio": 0.10 } }
+    ]
+  }
+]

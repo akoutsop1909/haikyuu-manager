@@ -1,17 +1,18 @@
 [
   {
-    "id": "brain_and_heart",
-    "name": "Brain & Heart",
-    "description": "Kuroo gains BLOCK equal to 10% of Kenma's SET stat; Kenma gains +10% SET.",
+    "id": "tactical_sync",
+    "name": "Tactical Sync",
+    "description": "Kenma gains +10% SET; Kuroo gains BLOCK equal to 10% of Kenma's SET stat.",
     "required_players": ["mb_kuroo_ssr", "s_kenma_ssr"],
     "target_boosts": [
-      { "player_id": "mb_kuroo_ssr", "stat": "block", "ratio_from_partner": { "partner_id": "s_kenma_ssr", "stat": "set", "ratio": 0.10 } },
-      { "player_id": "s_kenma_ssr", "stat": "set", "percent": 0.10 }
+      { "player_id": "s_kenma_ssr", "stat": "set", "percent": 0.10 },
+      { "player_id": "mb_kuroo_ssr", "stat": "block", "ratio_from_partner":
+      { "partner_id": "s_kenma_ssr", "stat": "set", "ratio": 0.10 } }
     ]
   },
   {
-    "id": "steady_foundations",
-    "name": "Steady Foundations",
+    "id": "defensive_bulwark",
+    "name": "Defensive Bulwark",
     "description": "Kuroo, Kai, and Yaku all gain +15% RECEIVE.",
     "required_players": ["mb_kuroo_ssr", "op_kai_sr", "l_yaku_sr"],
     "target_boosts": [
@@ -21,37 +22,39 @@
     ]
   },
   {
-    "id": "master_and_apprentice",
-    "name": "Master And Apprentice",
-    "description": "Lev gains SPIKE equal to 10% of Kuroo's BLOCK; Kuroo gains +10% BLOCK.",
+    "id": "captains_tutelage",
+    "name": "The Captain's Tutelage",
+    "description": "Kuroo gains +10% BLOCK; Lev gains BLOCK equal to 10% of Kuroo's BLOCK.",
     "required_players": ["mb_kuroo_ssr", "mb_lev_sr"],
     "target_boosts": [
-      { "player_id": "mb_lev_sr", "stat": "spike", "ratio_from_partner": { "partner_id": "mb_kuroo_ssr", "stat": "block", "ratio": 0.10 } },
-      { "player_id": "mb_kuroo_ssr", "stat": "block", "percent": 0.10 }
+      { "player_id": "mb_kuroo_ssr", "stat": "block", "percent": 0.10 },
+      { "player_id": "mb_lev_sr", "stat": "block", "ratio_from_partner":
+      { "partner_id": "mb_kuroo_ssr", "stat": "block", "ratio": 0.10 } }
     ]
   },
   {
-    "id": "whip_spike_connection",
-    "name": "Whip-Spike Connection",
+    "id": "spatial_harmony",
+    "name": "Spatial Harmony",
     "description": "Lev gains SPIKE equal to 5% of Kenma's SET stat.",
     "required_players": ["s_kenma_ssr", "mb_lev_sr"],
     "target_boosts": [
-      { "player_id": "mb_lev_sr", "stat": "spike", "ratio_from_partner": { "partner_id": "s_kenma_ssr", "stat": "set", "ratio": 0.05 } }
+      { "player_id": "mb_lev_sr", "stat": "spike", "ratio_from_partner":
+      { "partner_id": "s_kenma_ssr", "stat": "set", "ratio": 0.05 } }
     ]
   },
   {
-    "id": "guts_and_muscle",
-    "name": "Guts And Muscle",
-    "description": "Yamamoto gains +10% SPIKE; Yaku gains +10% RECEIVE.",
-    "required_players": ["ws_yamamoto_sr", "l_yaku_sr"],
+    "id": "calculated_and_clamorous",
+    "name": "Calculated & Clamorous",
+    "description": "Yamamoto and Fukunaga both gain +10% SPIKE.",
+    "required_players": ["ws_yamamoto_sr", "ws_fukunaga_sr"],
     "target_boosts": [
       { "player_id": "ws_yamamoto_sr", "stat": "spike", "percent": 0.10 },
-      { "player_id": "l_yaku_sr", "stat": "receive", "percent": 0.10 }
+      { "player_id": "ws_fukunaga_sr", "stat": "spike", "percent": 0.10 }
     ]
   },
   {
-    "id": "silent_workhorses",
-    "name": "Silent Workhorses",
+    "id": "quiet_chemistry",
+    "name": "Quiet Chemistry",
     "description": "Fukunaga gains +10% SPIKE; Kai gains +10% RECEIVE.",
     "required_players": ["ws_fukunaga_sr", "op_kai_sr"],
     "target_boosts": [
