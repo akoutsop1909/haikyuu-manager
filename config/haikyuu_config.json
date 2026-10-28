@@ -83,7 +83,7 @@
   "TEAM": {
     "max_lineups": 6,
     "default_lineup_name_format": "Lineup {}",
-    "min_synergy_players": 4,
+    "min_synergy_players": 4
   },
   "TOKYO_TRIP": {
     "min_r_sr_owned": 17,
