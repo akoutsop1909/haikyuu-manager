@@ -101,9 +101,9 @@
     "quote": "The view from the top... it's a wall I can't see over on my own.",
     "image_file": "mb_hinata_sr.jpg",
     "base_stats": {
-      "spike": 230,
-      "block": 150,
-      "receive": 175,
+      "spike": 190,
+      "block": 170,
+      "receive": 195,
       "set": 50,
       "serve": 120
     }

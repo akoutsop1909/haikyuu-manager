@@ -1,0 +1,66 @@
+[
+  {
+    "id": "absolute_champions",
+    "name": "Absolute Champions",
+    "description": "Ushijima and Reon both gain +15% SPIKE; Shirabu gains +15% SET.",
+    "required_players": ["op_ushijima_ssr", "s_shirabu_sr", "ws_reon_sr"],
+    "target_boosts": [
+      { "player_id": "op_ushijima_ssr", "stat": "spike", "percent": 0.15 },
+      { "player_id": "ws_reon_sr", "stat": "spike", "percent": 0.15 },
+      { "player_id": "s_shirabu_sr", "stat": "set", "percent": 0.15 }
+    ]
+  },
+  {
+    "id": "absolute_toss",
+    "name": "Absolute Toss",
+    "description": "Shirabu gains +10% SET; Ushijima gains SPIKE equal to 10% of Shirabu's SET stat.",
+    "required_players": ["s_shirabu_sr", "op_ushijima_ssr"],
+    "target_boosts": [
+      { "player_id": "s_shirabu_sr", "stat": "set", "percent": 0.10 },
+      { "player_id": "op_ushijima_ssr", "stat": "spike", "ratio_from_partner":
+      { "partner_id": "s_shirabu_sr", "stat": "set", "ratio": 0.10 } }
+    ]
+  },
+  {
+    "id": "guess_and_block",
+    "name": "Guess & Block",
+    "description": "Tendō gains +5% BLOCK; Kawanishi gains +10% BLOCK.",
+    "required_players": ["mb_tendo_ssr", "mb_kawanishi_sr"],
+    "target_boosts": [
+      { "player_id": "mb_tendo_ssr", "stat": "block", "percent": 0.05 },
+      { "player_id": "mb_kawanishi_sr", "stat": "block", "percent": 0.10 }
+    ]
+  },
+  {
+    "id": "aspiration_of_the_ace",
+    "name": "Aspiration of the Ace",
+    "description": "Ushijima gains +10% SERVE; Goshiki gains SPIKE equal to 10% of Ushijima's SPIKE stat.",
+    "required_players": ["ws_goshiki_sr", "op_ushijima_ssr"],
+    "target_boosts": [
+      { "player_id": "op_ushijima_ssr", "stat": "serve", "percent": 0.10 },
+      { "player_id": "ws_goshiki_sr", "stat": "spike", "ratio_from_partner":
+      { "partner_id": "op_ushijima_ssr", "stat": "spike", "ratio": 0.10 } }
+    ]
+  },
+  {
+    "id": "unorthodox_rhythm",
+    "name": "Unorthodox Rhythm",
+    "description": "Shirabu gains +10% RECEIVE; Tendō gains BLOCK equal to 8% of Shirabu's SET stat.",
+    "required_players": ["mb_tendo_ssr", "s_shirabu_sr"],
+    "target_boosts": [
+      { "player_id": "s_shirabu_sr", "stat": "receive", "percent": 0.08 },
+      { "player_id": "mb_tendo_ssr", "stat": "block", "ratio_from_partner":
+      { "partner_id": "s_shirabu_sr", "stat": "set", "ratio": 0.08 } }
+    ]
+  },
+  {
+    "id": "shiratorizawas_foundation",
+    "name": "Shiratorizawa's Foundation",
+    "description": "Reon and Yamagata both gain +10% RECEIVE.",
+    "required_players": ["ws_reon_sr", "l_yamagata_sr"],
+    "target_boosts": [
+      { "player_id": "ws_reon_sr", "stat": "receive", "percent": 0.10 },
+      { "player_id": "l_yamagata_sr", "stat": "receive", "percent": 0.10 }
+    ]
+  }
+]

@@ -1,0 +1,202 @@
+[
+  {
+    "id": "op_ushijima_ssr",
+    "name": "Wakatoshi Ushijima",
+    "school": "Shiratorizawa",
+    "position": "OP",
+    "rarity": "SSR",
+    "birthday": "08-13",
+    "embed_color": "0x663399",
+    "quote": "There is no need for us to look back. Strength is all that matters.",
+    "image_file": "op_ushijima_ssr.jpg",
+    "base_stats": {
+      "spike": 350,
+      "block": 200,
+      "receive": 160,
+      "set": 50,
+      "serve": 240
+    }
+  },
+  {
+    "id": "mb_tendo_ssr",
+    "name": "Satori Tendō",
+    "school": "Shiratorizawa",
+    "position": "MB",
+    "rarity": "SSR",
+    "birthday": "05-20",
+    "embed_color": "0x663399",
+    "quote": "Guess Monster! That's what they call me.",
+    "image_file": "mb_tendo_ssr.jpg",
+    "base_stats": {
+      "spike": 250,
+      "block": 380,
+      "receive": 150,
+      "set": 40,
+      "serve": 180
+    }
+  },
+  {
+    "id": "s_shirabu_sr",
+    "name": "Kenjirō Shirabu",
+    "school": "Shiratorizawa",
+    "position": "S",
+    "rarity": "SR",
+    "specialty_id": "precision_set",
+    "birthday": "05-04",
+    "embed_color": "0x663399",
+    "quote": "My job is simply to let Ushijima-san spike with absolute ease.",
+    "image_file": "s_shirabu_sr.jpg",
+    "base_stats": {
+      "spike": 90,
+      "block": 90,
+      "receive": 175,
+      "set": 280,
+      "serve": 90
+    }
+  },
+  {
+    "id": "ws_reon_sr",
+    "name": "Reon Ōhira",
+    "school": "Shiratorizawa",
+    "position": "WS",
+    "rarity": "SR",
+    "birthday": "10-30",
+    "embed_color": "0x663399",
+    "quote": "Even a messy receive just means we set it up for Ushijima.",
+    "image_file": "ws_reon_sr.jpg",
+    "base_stats": {
+      "spike": 250,
+      "block": 150,
+      "receive": 200,
+      "set": 45,
+      "serve": 80
+    }
+  },
+  {
+    "id": "ws_goshiki_sr",
+    "name": "Tsutomu Goshiki",
+    "school": "Shiratorizawa",
+    "position": "WS",
+    "rarity": "SR",
+    "birthday": "08-22",
+    "embed_color": "0x663399",
+    "quote": "I am going to become the next ace of Shiratorizawa!",
+    "image_file": "ws_goshiki_sr.jpg",
+    "base_stats": {
+      "spike": 280,
+      "block": 130,
+      "receive": 120,
+      "set": 40,
+      "serve": 155
+    }
+  },
+  {
+    "id": "mb_kawanishi_sr",
+    "name": "Taichi Kawanishi",
+    "school": "Shiratorizawa",
+    "position": "MB",
+    "rarity": "SR",
+    "birthday": "04-15",
+    "embed_color": "0x663399",
+    "quote": "I'll maintain our block rhythm without making unnecessary waves.",
+    "image_file": "mb_kawanishi_sr.jpg",
+    "base_stats": {
+      "spike": 200,
+      "block": 285,
+      "receive": 110,
+      "set": 35,
+      "serve": 95
+    }
+  },
+  {
+    "id": "l_yamagata_sr",
+    "name": "Hayato Yamagata",
+    "school": "Shiratorizawa",
+    "position": "L",
+    "rarity": "SR",
+    "birthday": "02-14",
+    "embed_color": "0x663399",
+    "quote": "As the libero, keeping the ball alive is my absolute duty.",
+    "image_file": "l_yamagata_sr.jpg",
+    "base_stats": {
+      "spike": 0,
+      "block": 0,
+      "receive": 285,
+      "set": 115,
+      "serve": 0
+    }
+  },
+  {
+    "id": "s_semi_r",
+    "name": "Eita Semi",
+    "school": "Shiratorizawa",
+    "position": "S",
+    "rarity": "R",
+    "specialty_id": "service_cannon",
+    "birthday": "11-11",
+    "embed_color": "0x663399",
+    "quote": "I can toss and serve just as fiercely as anyone else!",
+    "image_file": "s_semi_r.jpg",
+    "base_stats": {
+      "spike": 50,
+      "block": 40,
+      "receive": 95,
+      "set": 195,
+      "serve": 145
+    }
+  },
+  {
+    "id": "ws_soekawa_r",
+    "name": "Jin Soekawa",
+    "school": "Shiratorizawa",
+    "position": "WS",
+    "rarity": "R",
+    "birthday": "05-15",
+    "embed_color": "0x663399",
+    "quote": "Let's keep our composure and support the starters from the bench.",
+    "image_file": "ws_soekawa_r.jpg",
+    "base_stats": {
+      "spike": 160,
+      "block": 90,
+      "receive": 130,
+      "set": 40,
+      "serve": 105
+    }
+  },
+  {
+    "id": "ws_sagae_r",
+    "name": "Yūshō Sagae",
+    "school": "Shiratorizawa",
+    "position": "WS",
+    "rarity": "R",
+    "birthday": "12-04",
+    "embed_color": "0x663399",
+    "quote": "I'm always warmed up and ready to step in when called upon.",
+    "image_file": "ws_sagae_r.jpg",
+    "base_stats": {
+      "spike": 170,
+      "block": 80,
+      "receive": 120,
+      "set": 35,
+      "serve": 120
+    }
+  },
+  {
+    "id": "l_akakura_r",
+    "name": "Kai Akakura",
+    "school": "Shiratorizawa",
+    "position": "L",
+    "rarity": "R",
+    "birthday": "09-12",
+    "embed_color": "0x663399",
+    "quote": "I'll back up Yamagata-san and keep the backline covered!",
+    "image_file": "l_akakura_r.jpg",
+    "base_stats": {
+      "spike": 0,
+      "block": 0,
+      "receive": 190,
+      "set": 75,
+      "serve": 0
+    }
+  }
+]

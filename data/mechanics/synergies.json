@@ -1,5 +1,23 @@
 [
   {
+    "id": "aoba_johsai",
+    "school": "Aoba Johsai",
+    "description": "All players gain +10% SERVE and +10% RECEIVE.",
+    "boosts": [
+      { "stat": "serve", "percent": 0.10 },
+      { "stat": "receive", "percent": 0.10 }
+    ]
+  },
+  {
+    "id": "date_tech",
+    "school": "Date Tech",
+    "description": "All players gain +10% BLOCK and +10% SPIKE.",
+    "boosts": [
+      { "stat": "block", "percent": 0.10 },
+      { "stat": "spike", "percent": 0.10 }
+    ]
+  },
+  {
     "id": "karasuno",
     "school": "Karasuno",
     "description": "All players gain +10% SPIKE and +10% SERVE.",
@@ -18,21 +36,12 @@
     ]
   },
   {
-    "id": "aoba_johsai",
-    "school": "Aoba Johsai",
-    "description": "All players gain +10% SERVE and +10% RECEIVE.",
+    "id": "shiratorizawa",
+    "school": "Shiratorizawa",
+    "description": "All players gain +10% SERVE and +10% BLOCK.",
     "boosts": [
       { "stat": "serve", "percent": 0.10 },
-      { "stat": "receive", "percent": 0.10 }
-    ]
-  },
-  {
-    "id": "date_tech",
-    "school": "Date Tech",
-    "description": "All players gain +10% BLOCK and +10% SPIKE.",
-    "boosts": [
-      { "stat": "block", "percent": 0.10 },
-      { "stat": "spike", "percent": 0.10 }
+      { "stat": "block", "percent": 0.10 }
     ]
   }
 ]

@@ -10,11 +10,11 @@
     "quote": "We will stop any attack. That is the Iron Wall's job.",
     "image_file": "mb_aone_ssr.jpg",
     "base_stats": {
-      "spike": 270,
-      "block": 410,
-      "receive": 150,
+      "spike": 290,
+      "block": 365,
+      "receive": 170,
       "set": 40,
-      "serve": 130
+      "serve": 135
     }
   },
   {
@@ -28,11 +28,11 @@
     "quote": "Don't worry, seniors. We've got this covered.",
     "image_file": "ws_futakuchi_ssr.jpg",
     "base_stats": {
-      "spike": 310,
-      "block": 240,
-      "receive": 170,
+      "spike": 265,
+      "block": 270,
+      "receive": 190,
       "set": 60,
-      "serve": 220
+      "serve": 215
     }
   },
   {
