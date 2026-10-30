@@ -58,38 +58,42 @@ def apply_lineup_boosts(lineup_data: dict, user_cards: list[dict]) -> dict[str, 
                 for data in starting_cards.values():
                     if data["school"].lower() == active_synergy_school.lower():
                         if stat_key in data["stats"]:
-                            data["stats"][stat_key] += int(round(data["stats"][stat_key] * percent))
+                            data["stats"][stat_key] += data["stats"][stat_key] * percent
 
 # =========================================================================
 # STEP 2: APPLY CHARACTER BONDS
 # =========================================================================
+    # Pass 1: Apply all flat percentage boosts first so partner stats are fully updated
     for bond in BONDS_BY_ID.values():
         req_players = set(bond.get("required_players", []))
         if req_players and req_players.issubset(starting_card_ids):
-            # Bond conditions met! Apply target boosts
             for boost in bond.get("target_boosts", []):
-                target_id = boost.get("player_id")
-                stat_key = boost.get("stat")
-
-                if target_id not in id_to_slot_stats or stat_key not in id_to_slot_stats[target_id]:
-                    continue
-
-                # Case A: Flat percentage boost
                 if "percent" in boost:
+                    target_id = boost.get("player_id")
+                    stat_key = boost.get("stat")
                     percent = boost["percent"]
-                    id_to_slot_stats[target_id][stat_key] += int(round(id_to_slot_stats[target_id][stat_key] * percent))
 
-                # Case B: Ratio boost from a partner card's stat (e.g. 30% of Kageyama's set)
-                elif "ratio_from_partner" in boost:
+                    if target_id in id_to_slot_stats and stat_key in id_to_slot_stats[target_id]:
+                        id_to_slot_stats[target_id][stat_key] += id_to_slot_stats[target_id][stat_key] * percent
+
+    # Pass 2: Apply all ratio boosts using the newly updated partner stats
+    for bond in BONDS_BY_ID.values():
+        req_players = set(bond.get("required_players", []))
+        if req_players and req_players.issubset(starting_card_ids):
+            for boost in bond.get("target_boosts", []):
+                if "ratio_from_partner" in boost:
+                    target_id = boost.get("player_id")
+                    stat_key = boost.get("stat")
                     ratio_info = boost["ratio_from_partner"]
                     partner_id = ratio_info.get("partner_id")
                     partner_stat = ratio_info.get("stat")
                     ratio = ratio_info.get("ratio", 0.0)
 
-                    if partner_id in id_to_slot_stats and partner_stat in id_to_slot_stats[partner_id]:
-                        partner_value = id_to_slot_stats[partner_id][partner_stat]
-                        added_val = int(round(partner_value * ratio))
-                        id_to_slot_stats[target_id][stat_key] += added_val
+                    if target_id in id_to_slot_stats and stat_key in id_to_slot_stats[target_id]:
+                        if partner_id in id_to_slot_stats and partner_stat in id_to_slot_stats[partner_id]:
+                            partner_value = id_to_slot_stats[partner_id][partner_stat]
+                            added_val = partner_value * ratio
+                            id_to_slot_stats[target_id][stat_key] += added_val
 
 # =========================================================================
 # STEP 3: APPLY SETTER SPECIALTIES
@@ -111,7 +115,7 @@ def apply_lineup_boosts(lineup_data: dict, user_cards: list[dict]) -> dict[str, 
 
                 if setter_cid in id_to_slot_stats and source_stat in id_to_slot_stats[setter_cid]:
                     setter_source_val = id_to_slot_stats[setter_cid][source_stat]
-                    bonus_val = int(round(setter_source_val * ratio))
+                    bonus_val = setter_source_val * ratio
 
                     # Apply team-wide bonus to the specified stat
                     for data in starting_cards.values():
@@ -123,10 +127,15 @@ def apply_lineup_boosts(lineup_data: dict, user_cards: list[dict]) -> dict[str, 
                 percent = team_boost.get("percent", 0.0)
                 for data in starting_cards.values():
                     if stat_key in data["stats"]:
-                        data["stats"][stat_key] += int(round(data["stats"][stat_key] * percent))
+                        data["stats"][stat_key] += data["stats"][stat_key] * percent
 
     # Return structured dictionary of slot -> final boosted stats
-    return {slot: data["stats"] for slot, data in starting_cards.items() if slot in lineup_data}
+    final_boosted_stats = {}
+    for slot, data in starting_cards.items():
+        if slot in lineup_data:
+            final_boosted_stats[slot] = { stat_name: int(round(val)) for stat_name, val in data["stats"].items() }
+
+    return final_boosted_stats
 
 # =========================================================================
 # STEP 4: APPLY OPPONENT DEBUFFS
@@ -145,7 +154,7 @@ def apply_opponent_debuffs(opponent_stats: dict, setter_slot_stats: dict, setter
     # Case A: Flat percentage debuff (e.g., -10% Block, -15% Receive)
     if "percent" in debuff_rule:
         percent = debuff_rule["percent"]
-        opponent_stats[stat_key] = max(0, opponent_stats[stat_key] - int(round(opponent_stats[stat_key] * percent)))
+        opponent_stats[stat_key] = max(0.0, opponent_stats[stat_key] - (opponent_stats[stat_key] * percent))
 
     # Case B: Ratio debuff based on Setter's stat (e.g., -15% of Setter's Set stat)
     elif "ratio" in debuff_rule:
@@ -155,7 +164,10 @@ def apply_opponent_debuffs(opponent_stats: dict, setter_slot_stats: dict, setter
         # Use the FULLY BOOSTED setter stats, not raw scaled stats!
         source_val = setter_slot_stats.get(source_stat, 0)
 
-        reduction = int(round(source_val * ratio))
-        opponent_stats[stat_key] = max(0, opponent_stats[stat_key] - reduction)
+        reduction = source_val * ratio
+        opponent_stats[stat_key] = max(0.0, opponent_stats[stat_key] - reduction)
+
+    # FINAL STEP: Round the debuffed stat to a clean integer for display/simulation
+    opponent_stats[stat_key] = int(round(opponent_stats[stat_key]))
 
     return opponent_stats

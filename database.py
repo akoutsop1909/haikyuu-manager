@@ -292,8 +292,12 @@ async def get_user_cards(user_id: int) -> list[dict]:
     # Define rarity weights for sorting (higher number = higher priority)
     rarity_weights = {"SSR": 3, "SR": 2, "R": 1}
 
-    # Sort in Python: Highest level first, then highest rarity weight first
-    user_cards.sort(key=lambda card: (card["level"], rarity_weights.get(card["rarity"], 0)), reverse=True)
+    # Sort: Highest level first (-), highest rarity first (-), then alphabetical name (A-Z)
+    user_cards.sort(key=lambda card: (
+        -card["level"],
+        -rarity_weights.get(card["rarity"], 0),
+        card["name"]
+    ))
 
     return user_cards
 
@@ -906,12 +910,12 @@ async def boost_admin_account(user_id: int) -> bool:
 
 async def grant_all_cards(user_id: int) -> dict:
     """
-    Registers the admin with ADMIN_PACK items if brand-new, or unlocks all missing cards without re-granting items if existing.
+    Registers the admin with Starter Pack if brand-new, or unlocks all missing cards without re-granting items if existing.
     """
     is_new = not await user_exists(user_id)
 
     if is_new:
-        await boost_admin_account(user_id)
+        await register_user(user_id)
 
     async with pool.acquire() as conn:
         async with conn.transaction():
@@ -931,6 +935,7 @@ async def grant_all_cards(user_id: int) -> dict:
                 "is_new": is_new,
                 "granted_cards_count": len(missing_cards)
             }
+
 
 async def force_complete_tokyo_trip(user_id: int):
     """Forces an active Tokyo trip to reach its max duration instantly for testing/admin purposes."""

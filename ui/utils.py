@@ -14,7 +14,9 @@ RARITY_EMOJIS = {"R": "🔵", "SR": "🟣", "SSR": "🟡"}
 CARD_PATH_CACHE: dict[str, Path | None] = {}
 
 MAX_LINEUPS = TEAM_CONFIG["max_lineups"]
+DEFAULT_LINEUP_NAME = TEAM_CONFIG["default_lineup_name_format"]
 MIN_SYNERGY_PLAYERS = TEAM_CONFIG["min_synergy_players"]
+
 
 # ==============================================================================
 # 1. DISCORD UI & GENERAL HELPERS
@@ -323,7 +325,7 @@ class LineupSelectMenu(discord.ui.Select):
         options = []
 
         for i in range(1, MAX_LINEUPS + 1):
-            name = lineup_names.get(i, f"Lineup {i}")
+            name = lineup_names.get(i, DEFAULT_LINEUP_NAME.format(i))
             options.append(
                 discord.SelectOption(
                     label=name,
@@ -419,8 +421,9 @@ class BaseCardRosterView(discord.ui.View):
         from ui.gacha import UserHomeView
 
         await lock_view_ui(self, interaction)
-        embed = await UserHomeView.build_embed(interaction)
-        await interaction.edit_original_response(content=None, embed=embed, view=UserHomeView(self.user_id), attachments=[])
+        home_view = UserHomeView(self.user_id)
+        embed = await home_view.build_embed(interaction)
+        await interaction.edit_original_response(content=None, embed=embed, view=home_view, attachments=[])
 
 
 class PositionFilterSelectMenu(discord.ui.Select):

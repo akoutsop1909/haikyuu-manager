@@ -1,3 +1,4 @@
+import asyncio
 import discord
 
 from ui.utils import lock_view_ui, format_inventory_lines
@@ -15,19 +16,17 @@ class UserHomeView(discord.ui.View):
 
     @classmethod
     async def send_menu(cls, interaction: discord.Interaction):
-        """Encapsulates all logic for building and sending the main gacha menu."""
         view = cls(interaction.user.id)
         embed = await view.build_embed(interaction)
         await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
-    @staticmethod
-    async def build_embed(interaction: discord.Interaction) -> discord.Embed:
-        """Handles user setup/rewards and constructs the standardized Main Menu embed."""
-        is_new_user = await register_user(interaction.user.id)
-        daily = await claim_daily(interaction.user.id)
-        birthday = await claim_birthday(interaction.user.id)
-        inventory = await get_inventory(interaction.user.id)
-
+    async def build_embed(self, interaction: discord.Interaction) -> discord.Embed:
+        is_new_user, daily, birthday, inventory = await asyncio.gather(
+            register_user(self.user_id),
+            claim_daily(self.user_id),
+            claim_birthday(self.user_id),
+            get_inventory(self.user_id)
+        )
         if is_new_user:
             welcome_text = (
                 f"Welcome to the club, **{interaction.user.display_name}**! "
@@ -40,18 +39,18 @@ class UserHomeView(discord.ui.View):
             )
 
         if daily.claimed:
-            daily_status = (
-                f"\n\n**Daily Reward Claimed!**\n"
-                f"+{daily.scout_coins:,} {COIN_EMOJI}   +{daily.practice_balls:,} {BALL_EMOJI}\n"
-                f"📅 Days Played: {daily.total_logins}\n"
-                f"⏳ Reset: <t:{daily.next_reset}:R>"
-            )
+            header = "**Daily Reward Claimed!**"
+            rewards = f"+{daily.scout_coins:,} {COIN_EMOJI}   +{daily.practice_balls:,} {BALL_EMOJI}\n"
         else:
-            daily_status = (
-                f"\n\n**Daily Already Claimed**\n"
-                f"📅 Days Played: {daily.total_logins}\n"
-                f"⏳ Reset: <t:{daily.next_reset}:R>"
-            )
+            header = "**Daily Already Claimed**"
+            rewards = ""
+
+        daily_status = (
+            f"\n\n{header}\n"
+            f"{rewards}"
+            f"📅 Days Played: {daily.total_logins}\n"
+            f"⏳ Reset: <t:{daily.next_reset}:R>"
+        )
 
         embed = discord.Embed(
             title="🏐 Reach the Top!!",
@@ -68,7 +67,7 @@ class UserHomeView(discord.ui.View):
             else:
                 bonus_text = ""
 
-            title = "Today's Birthday" if len(birthday.birthdays_today) == 1 else "Today's Birthdays"
+            title = self._get_birthday_title(birthday.birthdays_today, "Today")
 
             embed.add_field(
                 name=title,
@@ -81,7 +80,7 @@ class UserHomeView(discord.ui.View):
 
         if birthday and birthday.birthdays_tomorrow:
             names_str = "\n".join([f"• {name}" for name in birthday.birthdays_tomorrow])
-            title = "Tomorrow's Birthday" if len(birthday.birthdays_tomorrow) == 1 else "Tomorrow's Birthdays"
+            title = self._get_birthday_title(birthday.birthdays_tomorrow, "Tomorrow")
             embed.add_field(
                 name=title,
                 value=names_str,
@@ -116,32 +115,24 @@ class UserHomeView(discord.ui.View):
     # --- ROW 0: Management ---
     @discord.ui.button(label="Scout", style=discord.ButtonStyle.primary, emoji="🔍", row=0)
     async def scout_button(self, interaction: discord.Interaction, _button: discord.ui.Button):
-        await lock_view_ui(self, interaction)
         from ui.scout import ScoutScreenView
-        view, embed, attachments = await ScoutScreenView.create(interaction.user.id)
-        await interaction.edit_original_response(embed=embed, view=view, attachments=attachments)
+        await self._navigate_to_screen(interaction, ScoutScreenView.create)
 
     @discord.ui.button(label="Train", style=discord.ButtonStyle.primary, emoji="🏋️", row=0)
     async def train_button(self, interaction: discord.Interaction, _button: discord.ui.Button):
-        await lock_view_ui(self, interaction)
         from ui.train import TrainScreenView
-        view, content, embed, attachments = await TrainScreenView.create(interaction.user.id)
-        await interaction.edit_original_response(content=content, embed=embed, view=view, attachments=attachments)
+        await self._navigate_to_screen(interaction, TrainScreenView.create)
 
     @discord.ui.button(label="Team", style=discord.ButtonStyle.primary, emoji="📋", row=0)
     async def team_button(self, interaction: discord.Interaction, _button: discord.ui.Button):
-        await lock_view_ui(self, interaction)
         from ui.team import TeamScreenView
-        view, content, embed, attachments = await TeamScreenView.create(interaction.user.id)
-        await interaction.edit_original_response(content=content, embed=embed, view=view, attachments=attachments)
+        await self._navigate_to_screen(interaction, TeamScreenView.create)
 
     # --- ROW 1: Active Game Modes ---
     @discord.ui.button(label="Match", style=discord.ButtonStyle.success, emoji="⚔️", row=1)
     async def match_button(self, interaction: discord.Interaction, _button: discord.ui.Button):
-        await lock_view_ui(self, interaction)
         from ui.match import MatchScreenView
-        view, content, embed, attachments = await MatchScreenView.create(interaction.user.id)
-        await interaction.edit_original_response(content=content, embed=embed, view=view, attachments=attachments)
+        await self._navigate_to_screen(interaction, MatchScreenView.create)
 
     @discord.ui.button(label="TOTC", style=discord.ButtonStyle.success, emoji="👑", row=1)
     async def totc_button(self, interaction: discord.Interaction, _button: discord.ui.Button):
@@ -154,10 +145,8 @@ class UserHomeView(discord.ui.View):
     # --- ROW 2: Event & Utilities ---
     @discord.ui.button(label="Trip", style=discord.ButtonStyle.secondary, emoji="🚌", row=2)
     async def trip_button(self, interaction: discord.Interaction, _button: discord.ui.Button):
-        await lock_view_ui(self, interaction)
         from ui.trip import TripScreenView
-        view, content, embed, attachments = await TripScreenView.create(interaction.user.id)
-        await interaction.edit_original_response(content=content, embed=embed, view=view, attachments=attachments)
+        await self._navigate_to_screen(interaction, TripScreenView.create)
 
     @discord.ui.button(label="Collection", style=discord.ButtonStyle.secondary, emoji="🎴", row=2)
     async def collection_button(self, interaction: discord.Interaction, _button: discord.ui.Button):
@@ -166,3 +155,14 @@ class UserHomeView(discord.ui.View):
     @discord.ui.button(label="Help", style=discord.ButtonStyle.secondary, emoji="❓", row=2)
     async def help_button(self, interaction: discord.Interaction, _button: discord.ui.Button):
         await interaction.response.send_message("Help & Guides coming soon!", ephemeral=True)
+
+    @staticmethod
+    def _get_birthday_title(names: list, day_label: str) -> str:
+        suffix = "Birthday" if len(names) == 1 else "Birthdays"
+        return f"{day_label}'s {suffix}"
+
+    async def _navigate_to_screen(self, interaction: discord.Interaction, view_factory):
+        """Helper to eliminate repetition across screen navigation buttons."""
+        await lock_view_ui(self, interaction)
+        view, content, embed, attachments = await view_factory(interaction.user.id)
+        await interaction.edit_original_response(content=content, embed=embed, view=view, attachments=attachments)

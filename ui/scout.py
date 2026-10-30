@@ -66,11 +66,11 @@ class ScoutScreenView(discord.ui.View):
         self._setup_components()
 
     @classmethod
-    async def create(cls, user_id: int) -> tuple["ScoutScreenView", discord.Embed, list[discord.File]]:
+    async def create(cls, user_id: int) -> tuple["ScoutScreenView", str | None, discord.Embed, list[discord.File]]:
         inventory = await get_inventory(user_id)
         view = cls(user_id, balance=inventory.scout_coins)
         embed, attachments = await view._get_screen_payload()
-        return view, embed, attachments
+        return view, None, embed, attachments
 
     async def build_embed(self) -> discord.Embed:
         # State 1: Inspecting a specific card from 10x results
@@ -112,8 +112,8 @@ class ScoutScreenView(discord.ui.View):
             title = "🔍 Player Scouting"
             description = (
                 "Scout elite players across schools to build your dream lineup!\n\n"
-                f"• 1x Scout: {COIN_EMOJI} **{COST_PER_PULL:,}**\n"
-                f"• 10x Scout: {COIN_EMOJI} **{cost_10x:,}**\n\n"
+                f"• Scout 1: {COIN_EMOJI} **{COST_PER_PULL:,}**\n"
+                f"• Scout 10: {COIN_EMOJI} **{cost_10x:,}**\n\n"
                 f"📊 **Drop Rates:** {rates_str}"
             )
             balance_val = inventory.scout_coins
@@ -164,8 +164,9 @@ class ScoutScreenView(discord.ui.View):
 
     async def _handle_back(self, interaction: discord.Interaction):
         await lock_view_ui(self, interaction)
-        embed = await UserHomeView.build_embed(interaction)
-        await interaction.edit_original_response(content=None, embed=embed, view=UserHomeView(self.user_id), attachments=[])
+        home_view = UserHomeView(self.user_id)
+        embed = await home_view.build_embed(interaction)
+        await interaction.edit_original_response(content=None, embed=embed, view=home_view, attachments=[])
 
     async def _handle_scout(self, interaction: discord.Interaction, count: int):
         cost = count * COST_PER_PULL
@@ -190,10 +191,17 @@ class ScoutScreenView(discord.ui.View):
         # Update view state
         self.balance = inventory.scout_coins - cost
         self._cleanup_dropdown()
-        self.pulled_cards = pulled_cards
-        self.selected_card_data = pulled_cards[0] if count == 1 else None
-        await self.update_screen(interaction)
 
+        if count == 1:
+            # 1x pull: Show the card directly without any dropdown/summary
+            self.pulled_cards = None
+            self.selected_card_data = pulled_cards[0]
+        else:
+            # 10x pull: Show the summary list and dropdown
+            self.pulled_cards = pulled_cards
+            self.selected_card_data = None
+
+        await self.update_screen(interaction)
     @staticmethod
     def _attach_scout_status_field(embed: discord.Embed, card_data: dict):
         """Helper to append gacha pull status to a card embed."""
