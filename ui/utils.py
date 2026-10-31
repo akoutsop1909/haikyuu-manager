@@ -149,11 +149,8 @@ def calculate_team_context(lineup_data: dict, user_cards: list[dict]) -> dict:
     syn_desc = None
     if active_synergy_school:
         matched_synergy = next(
-            (s for s in SYNERGIES_BY_ID.values() if s.get("school", "").lower() == active_synergy_school.lower()),
-            None
-        )
-        if matched_synergy:
-            syn_desc = matched_synergy["description"]
+            (s for s in SYNERGIES_BY_ID.values() if s.get("school", "").lower() == active_synergy_school.lower()))
+        syn_desc = matched_synergy["description"]
 
     return {
         "team_power": team_power,
