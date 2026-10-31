@@ -478,9 +478,12 @@ class Translator(commands.Cog):
         if missing_messages:
             logger.info(f"Found {len(missing_messages)} missing post(s). Translating now...")
 
-            for msg in missing_messages:
-                await self.process_and_send_message(msg)
-                await asyncio.sleep(2)  # Generous buffer for Discord API rate limits
+            # return_exceptions=True ensures that if one message fails catastrophically,
+            # the rest of the batch will still finish translating.
+            await asyncio.gather(
+                *(self.process_and_send_message(msg) for msg in missing_messages),
+                return_exceptions=True
+            )
 
             logger.info("Catch-up complete!")
         else:
