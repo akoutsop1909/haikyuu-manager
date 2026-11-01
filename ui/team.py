@@ -9,6 +9,9 @@ from ui.utils import lock_view_ui, format_lineup_court_display, create_card_embe
 from engine.data_loader import TEAM_CONFIG, ALL_SLOTS
 from database import get_user_cards, get_lineups, clear_lineup, update_lineup_name, add_to_lineup, remove_pinch
 
+SINGLE_SLOT_BY_POSITION = {"L": "libero", "OP": "opposite", "S": "setter"}
+POSITION_DISPLAY_NAMES = {"L": "Libero (L)", "OP": "Opposite Hitter (OP)", "S": "Setter (S)"}
+
 DEFAULT_LINEUP_NAME = TEAM_CONFIG["default_lineup_name_format"]
 
 class LineupRenameModal(discord.ui.Modal, title="Rename Lineup"):
@@ -180,9 +183,8 @@ class TeamScreenView(BaseCardRosterView):
                 self.add_item(btn_slot2)
 
             elif pos in ("L", "OP", "S"):
-                pos_map = {"L": "libero", "OP": "opposite", "S": "setter"}
-                pos_display = {"L": "Libero (L)", "OP": "Opposite Hitter (OP)", "S": "Setter (S)"}.get(pos, pos)
-                slot_name = pos_map.get(pos)
+                slot_name = SINGLE_SLOT_BY_POSITION.get(pos)
+                pos_display = POSITION_DISPLAY_NAMES.get(pos, pos)
 
                 btn_slot = discord.ui.Button(label=f"Add to {pos_display}", style=discord.ButtonStyle.primary,
                     emoji="📌", row=3, disabled=is_unavailable
