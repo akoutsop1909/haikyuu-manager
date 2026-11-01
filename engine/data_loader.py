@@ -91,3 +91,13 @@ STARTING_SLOTS = [
 ]
 
 ALL_SLOTS = STARTING_SLOTS + ["pinch_server"]
+
+POSITION_MAPPING = {
+    "setter": "S",
+    "opposite": "OP",
+    "wing_spiker_1": "WS",
+    "wing_spiker_2": "WS",
+    "middle_blocker_1": "MB",
+    "middle_blocker_2": "MB",
+    "libero": "L"
+}

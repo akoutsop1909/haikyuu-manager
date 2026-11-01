@@ -3,7 +3,7 @@
     "id": "cat_and_crow",
     "name": "Cat & Crow",
     "description": "Hinata gains SPIKE equal to 15% of Kenma's SET stat; Kenma gains +10% SET.",
-    "required_players": ["mb_hinata_s4", "s_kenma_ssr"],
+    "required_players": ["mb_hinata_sr", "s_kenma_ssr"],
     "target_boosts": [
       { "player_id": "mb_hinata_sr", "stat": "spike", "ratio_from_partner":
       { "partner_id": "s_kenma_ssr", "stat": "set", "ratio": 0.15 } },

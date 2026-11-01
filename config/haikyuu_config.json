@@ -85,6 +85,57 @@
     "default_lineup_name_format": "Lineup {}",
     "min_synergy_players": 4
   },
+  "MATCH": {
+    "difficulties": {
+      "Casual": {
+        "rarities": ["R"],
+        "level_range": [1, 15],
+        "resonance_range": [0, 0],
+        "force_school_synergy": false,
+        "target_bonds_count": 0,
+        "allowed_bond_sizes": [],
+        "has_pinch_server": false
+      },
+      "Easy": {
+        "rarities": ["R", "SR"],
+        "level_range": [15, 40],
+        "resonance_range": [0, 1],
+        "force_school_synergy": false,
+        "target_bonds_count": 1,
+        "allowed_bond_sizes": [2],
+        "has_pinch_server": false
+      },
+      "Normal": {
+        "rarities": ["R", "SR", "SSR"],
+        "level_range": [40, 70],
+        "resonance_range": [1, 2],
+        "force_school_synergy": false,
+        "target_bonds_count": 2,
+        "allowed_bond_sizes": [2],
+        "has_pinch_server": false
+      },
+      "Hard": {
+        "rarities": ["SR", "SSR"],
+        "level_range": [70, 90],
+        "resonance_range": [2, 3],
+        "force_school_synergy": true,
+        "target_bonds_count": 4,
+        "allowed_bond_sizes": [2, 3],
+        "mandatory_synergy_bond_size": 3,
+        "has_pinch_server": true
+      },
+      "Nightmare": {
+        "rarities": ["SR", "SSR"],
+        "level_range": [90, 100],
+        "resonance_range": [4, 5],
+        "force_school_synergy": true,
+        "target_bonds_count": 6,
+        "allowed_bond_sizes": [2, 3],
+        "mandatory_synergy_bond_size": 3,
+        "has_pinch_server": true
+      }
+    }
+  },
   "TOKYO_TRIP": {
     "min_r_sr_owned": 17,
     "allowed_rarities": [
