@@ -613,7 +613,7 @@ async def redeem_drink(user_id: int):
                     sports_drinks = sports_drinks + 1
                 WHERE user_id = $2
                 """,
-                TRAINING_CONFIG["drink_craft_cost"], user_id
+                TRAINING_CONFIG["drink_redeem_cost"], user_id
             )
 
 # ==============================================================================

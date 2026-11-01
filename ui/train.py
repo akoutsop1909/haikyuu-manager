@@ -9,7 +9,7 @@ from database import get_inventory, get_user_cards, train_card, redeem_drink, in
 # Load training configurations & item metadata shortcuts
 MAX_LVL = TRAINING_CONFIG["max_level"]
 MAX_RES = TRAINING_CONFIG["max_resonance"]
-CRAFT_VOUCHER_COST = TRAINING_CONFIG["drink_craft_cost"]
+REDEEM_VOUCHER_COST = TRAINING_CONFIG["drink_redeem_cost"]
 COSTS = TRAINING_CONFIG["resonance_drink_cost_by_rarity"]
 
 BALL_NAME = ITEM_METADATA["balls"]["name"]
@@ -72,10 +72,10 @@ class TrainScreenView(BaseCardRosterView):
         else:
             res_line = f"• Max Resonance Reached! (★{MAX_RES})"
 
-        craft_line = f"• Craft **1** {DRINK_EMOJI} {DRINK_NAME}: {VOUCHER_EMOJI} **{CRAFT_VOUCHER_COST}**"
-        res_text = f"{res_line}\n{craft_line}"
+        redeem_line = f"• Redeem **1** {DRINK_EMOJI} {DRINK_NAME}: {VOUCHER_EMOJI} **{REDEEM_VOUCHER_COST}**"
+        res_text = f"{res_line}\n{redeem_line}"
 
-        embed.add_field(name="🌟 Resonance & Crafting", value=res_text, inline=False)
+        embed.add_field(name="🌟 Resonance & Redeeming", value=res_text, inline=False)
 
         embed.set_footer(
             text=
@@ -196,9 +196,9 @@ class TrainScreenView(BaseCardRosterView):
         await self.update_screen(interaction)
 
     async def _handle_redeem(self, interaction: discord.Interaction):
-        if self.inventory.drink_vouchers < CRAFT_VOUCHER_COST:
+        if self.inventory.drink_vouchers < REDEEM_VOUCHER_COST:
             await interaction.response.send_message(
-                f"❌ You need at least {VOUCHER_EMOJI} **{CRAFT_VOUCHER_COST}** {VOUCHER_NAME} to redeem **1** {DRINK_NAME}!",
+                f"❌ You need at least {VOUCHER_EMOJI} **{REDEEM_VOUCHER_COST}** {VOUCHER_NAME} to redeem **1** {DRINK_NAME}!",
                 ephemeral=True
             )
             return
