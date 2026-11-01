@@ -61,7 +61,7 @@ BONDS_BY_ID = {}
 bonds_dir = DATA_DIR / "mechanics" / "bonds"
 
 if bonds_dir.exists():
-    for json_file in bonds_dir.glob("*.json"):
+    for json_file in bonds_dir.glob("**/*.json"):
         _load_json_items(json_file, BONDS_BY_ID, "bond")
 else:
     logger.warning(f"Missing bonds directory at: {bonds_dir}")

@@ -306,8 +306,31 @@ def add_card_metadata_fields(
         )
 
         if applicable_bonds:
+            # ---> SORTING LOGIC: Internal Duos (1) -> Internal Trios (2) -> Cross-School (3) <---
+            def get_bond_sort_key(bond):
+                req_ids = bond.get("required_players", [])
+
+                # Check if all required players belong to the same school as the target card
+                is_internal = all(
+                    CARDS_BY_ID.get(rid, {}).get("school") == target_card.get("school")
+                    for rid in req_ids
+                )
+
+                player_count = len(req_ids)
+
+                if is_internal:
+                    # Tier 1: Internal Duos (2 players), Tier 2: Internal Trios/Team (3+ players)
+                    tier = 1 if player_count <= 2 else 2
+                else:
+                    # Tier 3: Cross-school bonds
+                    tier = 3
+
+                return (tier, player_count, bond.get("name", ""))
+
+            sorted_bonds = sorted(applicable_bonds, key=get_bond_sort_key)
+
             bond_lines = []
-            for bond in applicable_bonds:
+            for bond in sorted_bonds:
                 req_ids = bond.get("required_players", [])
                 req_names = [
                     get_short_name(CARDS_BY_ID.get(rid, {}).get("name"))
@@ -317,8 +340,6 @@ def add_card_metadata_fields(
                 bond_lines.append(f"• **{bond['name']}** *({req_str})*\n  {bond['description']}")
 
             embed.add_field(name=title, value="\n".join(bond_lines), inline=False)
-        else:
-            embed.add_field(name=title, value="*No active bonds in this lineup.*", inline=False)
 
     return embed
 
