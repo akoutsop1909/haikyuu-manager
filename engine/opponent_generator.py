@@ -8,6 +8,33 @@ DIFFICULTY_SETTINGS = MATCH_CONFIG["difficulties"]
 MIN_SYNERGY_COUNT = TEAM_CONFIG["min_synergy_players"]
 
 
+def _build_opponent_card_info(card: dict, config: dict, level: int = None, resonance: int = None) -> dict:
+    min_lvl, max_lvl = config["level_range"]
+    min_res, max_res = config["resonance_range"]
+
+    # Use provided level/resonance if given, otherwise roll random ones
+    card_level = level if level is not None else random.randint(min_lvl, max_lvl)
+    card_resonance = resonance if resonance is not None else random.randint(min_res, max_res)
+
+    scaled_stats = calculate_card_stats(card["base_stats"], card_level, card["rarity"], card_resonance)
+
+    card_info = {
+        "id": card["id"],
+        "name": card["name"],
+        "school": card["school"],
+        "position": card["position"],
+        "rarity": card["rarity"],
+        "level": card_level,
+        "resonance": card_resonance,
+        "scaled_stats": scaled_stats
+    }
+
+    if card["position"] == "S":
+        card_info["specialty_id"] = card["specialty_id"]
+
+    return card_info
+
+
 def generate_opponent_team(difficulty: str) -> dict:
     config = DIFFICULTY_SETTINGS[difficulty]
 
@@ -134,79 +161,50 @@ def generate_opponent_team(difficulty: str) -> dict:
             ]
             chosen_card = random.choice(fallback_cards)
 
-        card_level = random.randint(min_lvl, max_lvl)
-        card_resonance = random.randint(min_res, max_res)
-
-        scaled_stats = calculate_card_stats(
-            base_stats=chosen_card["base_stats"],
-            level=card_level,
-            rarity=chosen_card["rarity"],
-            resonance=card_resonance
-        )
-
-        card_info = {
-            "id": chosen_card["id"],
-            "name": chosen_card["name"],
-            "school": chosen_card["school"],
-            "position": chosen_card["position"],
-            "rarity": chosen_card["rarity"],
-            "level": card_level,
-            "resonance": card_resonance,
-            "scaled_stats": scaled_stats,
-            "image_file": chosen_card.get("image_file")
-        }
-
+        card_info = _build_opponent_card_info(chosen_card, config)
         opponent_lineup[slot] = card_info
         opponent_cards_list.append(card_info)
 
-    # 3. Optional Pinch Server Evaluation
-    if has_pinch_server:
-        # Find eligible pinch server candidates from allowed rarities not yet in team
-        ps_candidates = []
-        for rarity in allowed_rarities:
-            for cid in CARDS_BY_RARITY.get(rarity, []):
-                if cid not in assigned_card_ids:
-                    ps_candidates.append(CARDS_BY_ID[cid])
-
-        if ps_candidates:
-            chosen_ps_card = random.choice(ps_candidates)
-            ps_level = random.randint(min_lvl, max_lvl)
-            ps_resonance = random.randint(min_res, max_res)
-
-            ps_scaled_stats = calculate_card_stats(
-                base_stats=chosen_ps_card["base_stats"],
-                level=ps_level,
-                rarity=chosen_ps_card["rarity"],
-                resonance=ps_resonance
-            )
-
-            # Find the lowest serve stat strictly among Middle Blockers (MB)
-            eligible_starting_slots = [
-                (s_name, s_data) for s_name, s_data in opponent_lineup.items()
-                if s_data["position"] == "MB"
+        # 3. Optional Pinch Server Evaluation
+        if has_pinch_server:
+            ps_candidates = [
+                CARDS_BY_ID[cid] for rarity in allowed_rarities
+                for cid in CARDS_BY_RARITY.get(rarity, [])
+                if cid not in assigned_card_ids
             ]
 
-            if eligible_starting_slots:
-                weakest_slot, weakest_data = min(
-                    eligible_starting_slots,
-                    key=lambda item: item[1]["scaled_stats"]["serve"]
+            if ps_candidates:
+                chosen_ps_card = random.choice(ps_candidates)
+
+                # Pre-roll stats to check against Middle Blockers
+                ps_level = random.randint(min_lvl, max_lvl)
+                ps_resonance = random.randint(min_res, max_res)
+                ps_scaled_stats = calculate_card_stats(
+                    base_stats=chosen_ps_card["base_stats"],
+                    level=ps_level,
+                    rarity=chosen_ps_card["rarity"],
+                    resonance=ps_resonance
                 )
 
-                # Only use pinch server if his serve stat is strictly higher than the weakest starter's serve
-                if ps_scaled_stats["serve"] > weakest_data["scaled_stats"]["serve"]:
-                    ps_card_info = {
-                        "id": chosen_ps_card["id"],
-                        "name": chosen_ps_card["name"],
-                        "school": chosen_ps_card["school"],
-                        "position": chosen_ps_card["position"],
-                        "rarity": chosen_ps_card["rarity"],
-                        "level": ps_level,
-                        "resonance": ps_resonance,
-                        "scaled_stats": ps_scaled_stats,
-                        "image_file": chosen_ps_card.get("image_file")
-                    }
-                    opponent_lineup["pinch_server"] = ps_card_info
-                    opponent_cards_list.append(ps_card_info)
+                eligible_starting_slots = [
+                    (s_name, s_data) for s_name, s_data in opponent_lineup.items()
+                    if s_data["position"] == "MB"
+                ]
+
+                if eligible_starting_slots:
+                    weakest_slot, weakest_data = min(
+                        eligible_starting_slots,
+                        key=lambda item: item[1]["scaled_stats"]["serve"]
+                    )
+
+                    # Only use pinch server if his serve stat is strictly higher than the weakest starter's serve
+                    if ps_scaled_stats["serve"] > weakest_data["scaled_stats"]["serve"]:
+                        # Pass the pre-rolled level and resonance so it doesn't re-roll!
+                        ps_card_info = _build_opponent_card_info(
+                            chosen_ps_card, config, level=ps_level, resonance=ps_resonance
+                        )
+                        opponent_lineup["pinch_server"] = ps_card_info
+                        opponent_cards_list.append(ps_card_info)
 
     return {
         "roster": opponent_lineup,

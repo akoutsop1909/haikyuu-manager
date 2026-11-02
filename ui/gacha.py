@@ -21,12 +21,14 @@ class UserHomeView(discord.ui.View):
         await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
     async def build_embed(self, interaction: discord.Interaction) -> discord.Embed:
-        is_new_user, daily, birthday, inventory = await asyncio.gather(
-            register_user(self.user_id),
-            claim_daily(self.user_id),
+        is_new_user = await register_user(self.user_id)
+        daily = await claim_daily(self.user_id)
+
+        birthday, inventory = await asyncio.gather(
             claim_birthday(self.user_id),
             get_inventory(self.user_id)
         )
+
         if is_new_user:
             welcome_text = (
                 f"Welcome to the club, **{interaction.user.display_name}**! "

@@ -17,7 +17,8 @@
     "scout_coins": 100,
     "practice_balls": 1500,
     "match_passes": 5,
-    "match_passes_cap": 5
+    "match_passes_cap": 5,
+    "match_refreshes_cap": 10
   },
   "BIRTHDAY_REWARD": {
     "base": {

@@ -1,21 +1,23 @@
 # ==============================================================================
 # SETUP & CONFIGURATION
 # ==============================================================================
+import json
 from datetime import datetime
 import os
 import logging
 import random
-import asyncpg
 
+import asyncpg
 from pydantic import BaseModel, Field
 
 from engine.game_logic import calculate_card_stats, get_single_level_cost, calculate_tokyo_trip_rewards
+from engine.opponent_generator import generate_opponent_team
 
 # Import all pre-loaded static configurations and lookup dictionaries
 from engine.data_loader import (
     CARDS_BY_ID, CARDS_BY_RARITY, BIRTHDAYS_BY_DATE,
     STARTER_PACK, DAILY_REWARD, BIRTHDAY_REWARD, SCOUT_CONFIG,
-    TEAM_CONFIG, TRAINING_CONFIG, TOKYO_TRIP_CONFIG, ADMIN_PACK, ALL_SLOTS
+    TRAINING_CONFIG, TEAM_CONFIG, TOKYO_TRIP_CONFIG, ADMIN_PACK, ALL_SLOTS
 )
 
 # Connection pool setup
@@ -29,7 +31,6 @@ class DailyClaim(BaseModel):
     claimed: bool = False
     scout_coins: int = Field(default=0, ge=0)
     practice_balls: int = Field(default=0, ge=0)
-    match_passes: int = Field(default=0, ge=0)
     total_logins: int = Field(default=0, ge=0)
     next_reset: int
 
@@ -43,6 +44,7 @@ class BirthdayClaim(BaseModel):
 
 class Inventory(BaseModel):
     match_passes: int = Field(default=0, ge=0)
+    match_refreshes: int = Field(default=0, ge=0)
     scout_coins: int = Field(default=0, ge=0)
     practice_balls: int = Field(default=0, ge=0)
     sports_drinks: int = Field(default=0, ge=0)
@@ -68,6 +70,7 @@ async def init_db_pool():
                 user_id BIGINT PRIMARY KEY,
 
                 match_passes INT DEFAULT 0 CHECK (match_passes >= 0),
+                match_refreshes INT DEFAULT 0 CHECK (match_refreshes >= 0),
                 scout_coins INT DEFAULT 0 CHECK (scout_coins >= 0),
                 practice_balls INT DEFAULT 0 CHECK (practice_balls >= 0),
                 sports_drinks INT DEFAULT 0 CHECK (sports_drinks >= 0),
@@ -79,10 +82,6 @@ async def init_db_pool():
                 total_logins INT DEFAULT 0,
 
                 tokyo_trip_start TIMESTAMPTZ,
-
-                match_wins INT DEFAULT 0,
-                current_streak INT DEFAULT 0,
-                highest_streak INT DEFAULT 0,
 
                 totc_weekly_score INT DEFAULT 0,
                 totc_highest_daily_score INT DEFAULT 0,
@@ -149,6 +148,16 @@ async def init_db_pool():
                 PRIMARY KEY (user_id, squad_number)
             );
          """)
+
+        # Create User Match Opponents Table
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS user_match_opponents (
+                user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                difficulty TEXT NOT NULL,
+                opponent_data TEXT NOT NULL, -- Stored as a JSON string
+                PRIMARY KEY (user_id, difficulty)
+            );
+        """)
 
 # ==============================================================================
 # 2. USER ACCOUNT MANAGEMENT
@@ -242,16 +251,12 @@ async def get_inventory(user_id: int) -> Inventory:
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             """
-            SELECT match_passes, scout_coins, practice_balls, sports_drinks, drink_vouchers, voucher_scraps 
+            SELECT match_passes, match_refreshes, scout_coins, practice_balls, sports_drinks, drink_vouchers, voucher_scraps 
             FROM users WHERE user_id = $1
             """,
             user_id
         )
-
-        if row:
-            return Inventory(**dict(row))
-
-        return Inventory()
+        return Inventory(**dict(row))
 
 
 async def get_user_cards(user_id: int) -> list[dict]:
@@ -281,12 +286,7 @@ async def get_user_cards(user_id: int) -> list[dict]:
             card_info["exhausted_until"] = row["exhausted_until"]
 
             # Attach fully scaled combat stats (Level + Resonance)
-            card_info["scaled_stats"] = calculate_card_stats(
-                card_info.get("base_stats", {}),
-                level,
-                rarity,
-                resonance
-            )
+            card_info["scaled_stats"] = calculate_card_stats(card_info["base_stats"], level, rarity, resonance)
             user_cards.append(card_info)
 
     # Define rarity weights for sorting (higher number = higher priority)
@@ -306,12 +306,10 @@ async def claim_daily(user_id: int) -> DailyClaim:
     claimed = False
     scout_coins = 0
     practice_balls = 0
-    match_passes_gained = 0
     total_logins = 0
 
     async with pool.acquire() as conn:
         async with conn.transaction():
-            # Dynamically uses the PostgreSQL database's configured timezone
             row_time = await conn.fetchrow("""
                 SELECT 
                     NOW() AS db_now,
@@ -323,14 +321,14 @@ async def claim_daily(user_id: int) -> DailyClaim:
             db_now = row_time["db_now"]
             next_reset_timestamp = int(row_time["next_reset_ts"])
 
-            # Fetch user's last claim and current match passes
             row = await conn.fetchrow(
-                "SELECT last_daily_claim, total_logins, match_passes FROM users WHERE user_id = $1",
+                "SELECT last_daily_claim, total_logins FROM users WHERE user_id = $1",
                 user_id
             )
 
             if row:
-                last_claim, total_logins, current_passes = row["last_daily_claim"], row["total_logins"] or 0, row["match_passes"] or 0
+                last_claim = row["last_daily_claim"]
+                total_logins = row["total_logins"] or 0
 
                 can_claim = True if last_claim is None else db_now.date() > last_claim.date()
 
@@ -338,31 +336,35 @@ async def claim_daily(user_id: int) -> DailyClaim:
                     scout_coins = DAILY_REWARD["scout_coins"]
                     practice_balls = DAILY_REWARD["practice_balls"]
 
-                    # Calculate how many passes are actually added respecting the config cap
-                    target_passes = min(DAILY_REWARD["match_passes_cap"], current_passes + DAILY_REWARD["match_passes"])
-                    match_passes_gained = target_passes - current_passes
-
                     total_logins += 1
                     claimed = True
 
+                    # Both match passes and refreshes hard-reset to their max caps daily
                     await conn.execute("""
                         UPDATE users 
                         SET scout_coins = scout_coins + $1,
                             practice_balls = practice_balls + $2,
-                            match_passes = LEAST($3, match_passes + $4),
+                            match_passes = $3,
+                            match_refreshes = $4,
                             total_logins = total_logins + 1,
                             last_daily_claim = $5
                         WHERE user_id = $6
-                    """, scout_coins, practice_balls, DAILY_REWARD["match_passes_cap"], DAILY_REWARD["match_passes"], db_now, user_id)
+                    """,
+                    scout_coins,
+                    practice_balls,
+                    DAILY_REWARD["match_passes_cap"],  # Hard reset to 5
+                    DAILY_REWARD["match_refreshes_cap"], # Hard reset to 10
+                    db_now,
+                    user_id)
 
     return DailyClaim(
         claimed=claimed,
         scout_coins=scout_coins,
         practice_balls=practice_balls,
-        match_passes=match_passes_gained,
         total_logins=total_logins,
         next_reset=next_reset_timestamp,
     )
+
 
 async def claim_birthday(user_id: int) -> BirthdayClaim:
     total_coins = 0
@@ -711,7 +713,49 @@ async def add_to_lineup(user_id: int, lineup_number: int, slot_name: str, card_i
         )
 
 # ==============================================================================
-# 6. TOKYO TRIP
+# 6. MATCH
+# ==============================================================================
+async def consume_match_refresh(user_id: int):
+    """Deducts 1 match refresh if available. Returns True if successful."""
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            UPDATE users 
+            SET match_refreshes = match_refreshes - 1 
+            WHERE user_id = $1 AND match_refreshes > 0
+            """,
+            user_id
+        )
+
+
+async def get_or_create_opponent(user_id: int, difficulty: str, force_regenerate: bool = False) -> dict:
+    async with pool.acquire() as conn:
+        # 1. If we aren't forcing a refresh, check if a locked opponent already exists
+        if not force_regenerate:
+            row = await conn.fetchrow(
+                "SELECT opponent_data FROM user_match_opponents WHERE user_id = $1 AND difficulty = $2",
+                user_id, difficulty
+            )
+            if row:
+                return json.loads(row["opponent_data"])
+
+        # 2. Otherwise (forced or none exists), generate a fresh opponent team
+        new_opponent = generate_opponent_team(difficulty)
+
+        # 3. Save/overwrite it in the database so it's locked in
+        await conn.execute(
+            """
+            INSERT INTO user_match_opponents (user_id, difficulty, opponent_data)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (user_id, difficulty) 
+            DO UPDATE SET opponent_data = EXCLUDED.opponent_data
+            """,
+            user_id, difficulty, json.dumps(new_opponent)
+        )
+        return new_opponent
+
+# ==============================================================================
+# 7. TOKYO TRIP
 # ==============================================================================
 async def get_trip_squads(user_id: int) -> dict[int, dict]:
     """Fetches all saved Tokyo trip squads for a user."""
@@ -877,7 +921,7 @@ async def claim_tokyo_trip(user_id: int):
             )
 
 # ==============================================================================
-# 7. ADMIN & UTILITY OPERATIONS
+# 8. ADMIN & UTILITY OPERATIONS
 # ==============================================================================
 async def boost_admin_account(user_id: int) -> bool:
     """

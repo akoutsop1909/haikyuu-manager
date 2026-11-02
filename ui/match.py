@@ -4,9 +4,8 @@ import discord
 from ui.utils import lock_view_ui, format_lineup_court_display, create_card_embed, add_card_metadata_fields, \
     LineupSelectMenu, CardSelectMenu, BaseCardRosterView
 from engine.data_loader import TEAM_CONFIG, STARTING_SLOTS, ALL_SLOTS
-from engine.opponent_generator import generate_opponent_team
-from engine.mechanics_boosts import apply_lineup_boosts
-from database import get_lineups, get_user_cards
+from engine.mechanics_boosts import apply_lineup_boosts, prepare_match_matchup
+from database import get_lineups, get_inventory, get_user_cards, get_or_create_opponent, consume_match_refresh
 
 DEFAULT_LINEUP_NAME = TEAM_CONFIG["default_lineup_name_format"]
 
@@ -48,23 +47,27 @@ class DifficultySelectMenu(discord.ui.Select):
 
 class MatchScreenView(BaseCardRosterView):
     def __init__(self, user_id: int, user_cards: list[dict], lineups: dict[int, dict] = None,
-                 selected_card_id: str | None = None):
+                 selected_card_id: str | None = None, initial_opponent: dict | None = None,
+                 match_refreshes: int = 0):
         super().__init__(user_id, user_cards, selected_card_id)
         self.selected_lineup_index = 1
         self.lineups = lineups or {}
         self.state = "opponent_select"
         self.selected_difficulty = "Normal"
-        self.current_opponent = generate_opponent_team(self.selected_difficulty)
+        self.current_opponent = initial_opponent or {}
+        self.match_refreshes = match_refreshes
         self._setup_components()
 
     @classmethod
     async def create(cls, user_id: int, selected_card_id: str | None = None):
-        user_cards, lineups = await asyncio.gather(
+        user_cards, lineups, initial_opponent, inventory = await asyncio.gather(
             get_user_cards(user_id),
-            get_lineups(user_id)
+            get_lineups(user_id),
+            get_or_create_opponent(user_id, "Normal"),
+            get_inventory(user_id)
         )
 
-        view = cls(user_id, user_cards, lineups, selected_card_id)
+        view = cls(user_id, user_cards, lineups, selected_card_id, initial_opponent, inventory.match_refreshes)
         content, embed, attachments = await view._get_screen_payload()
         return view, content, embed, attachments
 
@@ -155,10 +158,15 @@ class MatchScreenView(BaseCardRosterView):
             # Row 0: Difficulty Dropdown Menu
             self.add_item(DifficultySelectMenu(self.selected_difficulty))
 
-            # Row 1: Play button to transition to lineup selection
+            # Row 1: Play Match & Refresh Opponent buttons side by side
             btn_play = discord.ui.Button(label="Play Match", style=discord.ButtonStyle.success, emoji="🏐", row=1)
             btn_play.callback = self._handle_play_click
             self.add_item(btn_play)
+
+            btn_refresh = discord.ui.Button(label=f"Refresh ({self.match_refreshes})", style=discord.ButtonStyle.primary,
+                emoji="🔄", row=1, disabled=(self.match_refreshes <= 0))
+            btn_refresh.callback = self._handle_refresh_click
+            self.add_item(btn_refresh)
 
             # Row 2: Back to home/menu button
             btn_back = discord.ui.Button(label="Back", style=discord.ButtonStyle.secondary, emoji="⬅️", row=2)
@@ -193,8 +201,12 @@ class MatchScreenView(BaseCardRosterView):
             self.add_item(btn_back_match)
 
     async def update_screen(self, interaction: discord.Interaction):
-        self.lineups = await get_lineups(self.user_id)
-        self.current_opponent = generate_opponent_team(self.selected_difficulty)
+        self.lineups, self.current_opponent, inventory = await asyncio.gather(
+            get_lineups(self.user_id),
+            get_or_create_opponent(self.user_id, self.selected_difficulty),
+            get_inventory(self.user_id)
+        )
+        self.match_refreshes = inventory.match_refreshes
         self._setup_components()
 
         content, embed, attachments = await self._get_screen_payload()
@@ -211,11 +223,24 @@ class MatchScreenView(BaseCardRosterView):
         self.state = "lineup_select"  # Switch state to lineup selection
         await self.update_screen(interaction)
 
+    async def _handle_refresh_click(self, interaction: discord.Interaction):
+        await lock_view_ui(self, interaction)
+        await consume_match_refresh(self.user_id)
+        await get_or_create_opponent(self.user_id, self.selected_difficulty, force_regenerate=True)
+        await self.update_screen(interaction)
+
     async def confirm_lineup_callback(self, interaction: discord.Interaction):
         await lock_view_ui(self, interaction)
-        # You can now access `self.selected_difficulty` here when starting the actual simulation match!
-        await interaction.followup.send(f"Lineup confirmed for **{self.selected_difficulty}** difficulty match!",
-                                        ephemeral=True)
+        team_data = self.lineups.get(self.selected_lineup_index, {})
+
+        # Offload the entire calculation, snapshotting, and debuff pipeline to the engine layer
+        user_stats, opponent_stats = prepare_match_matchup(team_data, self.user_cards, self.current_opponent)
+
+        # Pass `user_boosted_stats` and `opponent_boosted_stats` straight into your match simulation!
+        await interaction.followup.send(
+            f"Lineup confirmed for **{self.selected_difficulty}** difficulty match! Symmetrical debuffs applied.",
+            ephemeral=True
+        )
 
     async def _get_screen_payload(self) -> tuple[str | None, discord.Embed, list[discord.File]]:
         content = await self.build_content()
