@@ -325,7 +325,7 @@ def add_card_metadata_fields(
                     # Tier 3: Cross-school bonds
                     tier = 3
 
-                return (tier, player_count, bond.get("name", ""))
+                return tier, player_count, bond.get("name", "")
 
             sorted_bonds = sorted(applicable_bonds, key=get_bond_sort_key)
 

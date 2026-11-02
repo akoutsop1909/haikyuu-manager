@@ -99,5 +99,6 @@ POSITION_MAPPING = {
     "wing_spiker_2": "WS",
     "middle_blocker_1": "MB",
     "middle_blocker_2": "MB",
-    "libero": "L"
+    "libero": "L",
+    "pinch_server": "PS"
 }

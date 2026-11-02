@@ -1,11 +1,14 @@
 import asyncio
 import discord
 
-from ui.utils import lock_view_ui, format_lineup_court_display, create_card_embed, add_card_metadata_fields, \
-    LineupSelectMenu, CardSelectMenu, BaseCardRosterView
-from engine.data_loader import TEAM_CONFIG, STARTING_SLOTS, ALL_SLOTS
+from ui.utils import lock_view_ui, format_lineup_court_display, format_resonance_badge, get_short_name, create_card_embed, \
+    calculate_team_context, add_card_metadata_fields, LineupSelectMenu, CardSelectMenu, BaseCardRosterView
+from engine.data_loader import TEAM_CONFIG, STARTING_SLOTS, ALL_SLOTS, POSITION_MAPPING
+from engine.opponent_generator import unpack_opponent_team
 from engine.mechanics_boosts import apply_lineup_boosts, prepare_match_matchup
 from database import get_lineups, get_inventory, get_user_cards, get_or_create_opponent, consume_match_refresh
+
+DIFFICULTY_EMOJIS = {"Casual": "🌱", "Easy": "👟", "Normal": "⚡", "Hard": "💥", "Nightmare": "💀"}
 
 DEFAULT_LINEUP_NAME = TEAM_CONFIG["default_lineup_name_format"]
 
@@ -83,47 +86,44 @@ class MatchScreenView(BaseCardRosterView):
         team_data = self.lineups.get(self.selected_lineup_index, {})
         return format_lineup_court_display(team_data, self.user_cards, self.selected_lineup_index)
 
-    async def build_embed(self) -> discord.Embed:
+    async def build_embed(self) -> discord.Embed | None:
         if self.state == "opponent_select":
-            difficulty_emojis = {
-                "Casual": "🌱", "Easy": "👟", "Normal": "⚡", "Hard": "💥", "Nightmare": "💀"
-            }
-            diff_emoji = difficulty_emojis.get(self.selected_difficulty, "⚡")
+            diff_emoji = DIFFICULTY_EMOJIS[self.selected_difficulty]
+
+            # 1. Unpack opponent team using your generator helper
+            lineup, cards_list, slot_to_id = unpack_opponent_team(self.current_opponent)
+
+            # 2. Extract active bonuses via calculate_team_context
+            ctx = calculate_team_context(slot_to_id, cards_list)
+
+            # 3. Format clean team info values
+            synergy_val = f"({ctx['active_synergy_school']})" if ctx['active_synergy_school'] else "(None)"
+            specialty_val = ctx['active_specialty_name']
+            bonds_val = ctx['active_bonds_count']
 
             embed = discord.Embed(
-                title="🏐 Match Arena - Opponent Scouting",
+                title="⚔️ Match - Opponent Scouting",
                 description=(
-                    f"• **Difficulty:** {diff_emoji} **{self.selected_difficulty}**\n"
-                    "Review the scouted opponent roster below. Click **Play Match** to configure your lineup and challenge them!"
+                    f"• **Difficulty:** {diff_emoji} {self.selected_difficulty}\n"
+                    f"• **Synergy:** 🏫 {synergy_val}\n"
+                    f"• **Specialty:** 🎯 {specialty_val}\n"
+                    f"• **Bonds:** 🤝 {bonds_val} Active"
                 ),
-                color=discord.Color.blue(),
+                color=discord.Color.from_rgb(217, 56, 58),
             )
 
-            # Build clean player lines from the generated roster
-            roster = self.current_opponent.get("roster", {})
-            slot_labels = {
-                "setter": "Setter (S)",
-                "opposite": "Opposite (OP)",
-                "wing_spiker_1": "Wing Spiker (WS)",
-                "wing_spiker_2": "Wing Spiker (WS)",
-                "middle_blocker_1": "Middle Blocker (MB)",
-                "middle_blocker_2": "Middle Blocker (MB)",
-                "libero": "Libero (L)",
-                "pinch_server": "Pinch Server (PS)"
-            }
-
+            # Build clean player lines from the generated lineup
             player_lines = []
-            for slot, label in slot_labels.items():
-                p_data = roster.get(slot)
+            for slot, label in POSITION_MAPPING.items():
+                p_data = lineup.get(slot)
                 if p_data:
-                    player_lines.append(f"• **{label}:** {p_data['name']} *({p_data['rarity']} | Lv.{p_data['level']} | {p_data['school']})*")
+                    short_name = get_short_name(p_data['name'])
+                    res_badge = format_resonance_badge(p_data['resonance'])
+                    player_lines.append(
+                        f"• **[{label}]:** {short_name} *({p_data['rarity']} | Lv.{p_data['level']} | {res_badge})*"
+                    )
 
-            if player_lines:
-                embed.add_field(
-                    name="👥 Opponent Roster",
-                    value="\n".join(player_lines),
-                    inline=False
-                )
+            embed.add_field(name="🎽 Opponent Lineup", value="\n".join(player_lines), inline=False)
 
             return embed
 
@@ -132,14 +132,12 @@ class MatchScreenView(BaseCardRosterView):
         target_card = self._get_target_card(filtered_cards)
 
         if not target_card:
-            return discord.Embed(title="Lineup Empty", description="Please select cards for your lineup.",
-                                 color=discord.Color.orange())
+            return None
 
         team_data = self.lineups.get(self.selected_lineup_index, {})
         boosted_stats_map = apply_lineup_boosts(team_data, self.user_cards)
         target_slot = next((slot for slot, cid in team_data.items() if cid == target_card["id"]), None)
-        card_stats = boosted_stats_map.get(target_slot,
-                                           target_card.get("scaled_stats", target_card.get("base_stats", {})))
+        card_stats = boosted_stats_map.get(target_slot, target_card.get("scaled_stats", target_card.get("base_stats", {})))
 
         card_lookup = {c["id"]: c for c in self.user_cards}
         active_lineup_card_ids = {
@@ -158,25 +156,25 @@ class MatchScreenView(BaseCardRosterView):
             # Row 0: Difficulty Dropdown Menu
             self.add_item(DifficultySelectMenu(self.selected_difficulty))
 
-            # Row 1: Play Match & Refresh Opponent buttons side by side
-            btn_play = discord.ui.Button(label="Play Match", style=discord.ButtonStyle.success, emoji="🏐", row=1)
-            btn_play.callback = self._handle_play_click
-            self.add_item(btn_play)
+            # Row 1: Lock Opponent & Refresh buttons
+            btn_lock = discord.ui.Button(label="Lock Opponent", style=discord.ButtonStyle.success, row=1)
+            btn_lock.callback = self._handle_lock_opponent_click
+            self.add_item(btn_lock)
 
             btn_refresh = discord.ui.Button(label=f"Refresh ({self.match_refreshes})", style=discord.ButtonStyle.primary,
-                emoji="🔄", row=1, disabled=(self.match_refreshes <= 0))
+                emoji="🔄", row=1, disabled=(self.match_refreshes <= 0)
+            )
             btn_refresh.callback = self._handle_refresh_click
             self.add_item(btn_refresh)
 
-            # Row 2: Back to home/menu button
+            # Row 2: Back button
             btn_back = discord.ui.Button(label="Back", style=discord.ButtonStyle.secondary, emoji="⬅️", row=2)
-            btn_back.callback = self._handle_back  # Your existing home back handler
+            btn_back.callback = self._handle_back
             self.add_item(btn_back)
 
         elif self.state == "lineup_select":
             filtered_cards, page_cards, max_pages, page_info = self._setup_pagination()
-            lineup_names_map = {i: data.get("lineup_name", DEFAULT_LINEUP_NAME.format(i)) for i, data in
-                                self.lineups.items()}
+            lineup_names_map = {i: data.get("lineup_name", DEFAULT_LINEUP_NAME.format(i)) for i, data in self.lineups.items()}
 
             # Row 0: Lineup Selector
             self.add_item(LineupSelectMenu(self.selected_lineup_index, lineup_names_map))
@@ -218,7 +216,7 @@ class MatchScreenView(BaseCardRosterView):
         self.selected_card_id = None
         await self.update_screen(interaction)
 
-    async def _handle_play_click(self, interaction: discord.Interaction):
+    async def _handle_lock_opponent_click(self, interaction: discord.Interaction):
         await lock_view_ui(self, interaction)
         self.state = "lineup_select"  # Switch state to lineup selection
         await self.update_screen(interaction)
@@ -242,13 +240,13 @@ class MatchScreenView(BaseCardRosterView):
             ephemeral=True
         )
 
-    async def _get_screen_payload(self) -> tuple[str | None, discord.Embed, list[discord.File]]:
+    async def _get_screen_payload(self) -> tuple[str | None, discord.Embed | None, list[discord.File]]:
         content = await self.build_content()
         embed = await self.build_embed()
 
         if self.state == "opponent_select":
-            attachments = []  # You can add a match banner file here if you want!
+            attachments = []
         else:
-            attachments = self._get_target_card_attachments()
+            attachments = self._get_target_card_attachments() if embed else []
 
         return content, embed, attachments

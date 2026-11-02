@@ -8,6 +8,13 @@ DIFFICULTY_SETTINGS = MATCH_CONFIG["difficulties"]
 MIN_SYNERGY_COUNT = TEAM_CONFIG["min_synergy_players"]
 
 
+def unpack_opponent_team(opponent_data: dict) -> tuple[dict, list[dict], dict]:
+    """Unpacks an opponent dictionary into (lineup, cards_list, slot_to_id_mapping)."""
+    lineup = opponent_data.get("lineup", {})
+    cards_list = opponent_data.get("cards_list", [])
+    slot_to_id = {slot: p_data["id"] for slot, p_data in lineup.items() if "id" in p_data}
+    return lineup, cards_list, slot_to_id
+
 def _build_opponent_card_info(card: dict, config: dict, level: int = None, resonance: int = None) -> dict:
     min_lvl, max_lvl = config["level_range"]
     min_res, max_res = config["resonance_range"]
@@ -207,6 +214,6 @@ def generate_opponent_team(difficulty: str) -> dict:
                         opponent_cards_list.append(ps_card_info)
 
     return {
-        "roster": opponent_lineup,
+        "lineup": opponent_lineup,
         "cards_list": opponent_cards_list
     }

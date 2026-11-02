@@ -1,6 +1,7 @@
 import copy
 from collections import defaultdict
 from engine.data_loader import SPECIALTIES_BY_ID, BONDS_BY_ID, SYNERGIES_BY_ID, TEAM_CONFIG, STARTING_SLOTS, ALL_SLOTS
+from engine.opponent_generator import unpack_opponent_team
 
 MIN_SYNERGY_PLAYERS = TEAM_CONFIG["min_synergy_players"]
 
@@ -9,18 +10,16 @@ def prepare_match_matchup(user_lineup_data: dict, user_cards: list[dict], oppone
     # 1. User stats calculation
     user_stats = apply_lineup_boosts(user_lineup_data, user_cards)
 
-    # 2. Opponent stats calculation
-    opponent_roster = opponent_data.get("roster", {})
-    opponent_cards = opponent_data.get("cards_list", [])
-    opponent_lineup_data = {slot: p_data["id"] for slot, p_data in opponent_roster.items() if "id" in p_data}
-    opponent_stats = apply_lineup_boosts(opponent_lineup_data, opponent_cards)
+    # 2. Opponent stats calculation (using the clean unpacking helper)
+    opponent_lineup, opponent_cards, opponent_card_data = unpack_opponent_team(opponent_data)
+    opponent_stats = apply_lineup_boosts(opponent_card_data, opponent_cards)
 
     # 3. Snapshot pre-debuff states for fair ratio calculations
     initial_user_stats = copy.deepcopy(user_stats)
     initial_opp_stats = copy.deepcopy(opponent_stats)
 
     # 4. Apply symmetrical debuffs
-    user_stats = apply_setter_debuff(user_stats, opponent_lineup_data, initial_opp_stats, opponent_cards)
+    user_stats = apply_setter_debuff(user_stats, opponent_card_data, initial_opp_stats, opponent_cards)
     opponent_stats = apply_setter_debuff(opponent_stats, user_lineup_data, initial_user_stats, user_cards)
 
     return user_stats, opponent_stats
@@ -119,25 +118,27 @@ def apply_lineup_boosts(lineup_data: dict, cards: list[dict]) -> dict[str, dict]
 # STEP 3: APPLY SETTER SPECIALTIES (All Positions)
 # =========================================================================
     setter_cid = lineup_data.get("setter")
-    setter_card = card_lookup[setter_cid]
-    specialty = SPECIALTIES_BY_ID[setter_card["specialty_id"]]
-    team_boost = specialty["team_boost"]
-    stat_key = team_boost["stat"]
+    if setter_cid and setter_cid in card_lookup:
+        setter_card = card_lookup[setter_cid]
+        if setter_card.get("specialty_id") in SPECIALTIES_BY_ID:
+            specialty = SPECIALTIES_BY_ID[setter_card["specialty_id"]]
+            team_boost = specialty["team_boost"]
+            stat_key = team_boost["stat"]
 
-    # Case A: Scaling boost from Setter's source stat
-    if "ratio" in team_boost:
-        ratio = team_boost["ratio"]
-        source_stat = specialty["source_stat"]
-        setter_source_val = id_to_slot_stats[setter_cid][source_stat]
-        bonus_val = setter_source_val * ratio
-        for data in lineup_cards.values():
-            data["stats"][stat_key] += bonus_val
+            # Case A: Scaling boost from Setter's source stat
+            if "ratio" in team_boost:
+                ratio = team_boost["ratio"]
+                source_stat = specialty["source_stat"]
+                setter_source_val = id_to_slot_stats[setter_cid][source_stat]
+                bonus_val = setter_source_val * ratio
+                for data in lineup_cards.values():
+                    data["stats"][stat_key] += bonus_val
 
-    # Case B: Flat percentage boost to team stat
-    elif "percent" in team_boost:
-        percent = team_boost["percent"]
-        for data in lineup_cards.values():
-            data["stats"][stat_key] += data["stats"][stat_key] * percent
+            # Case B: Flat percentage boost to team stat
+            elif "percent" in team_boost:
+                percent = team_boost["percent"]
+                for data in lineup_cards.values():
+                    data["stats"][stat_key] += data["stats"][stat_key] * percent
 
     # Return structured dictionary of slot -> final boosted stats
     final_boosted_stats = {}
