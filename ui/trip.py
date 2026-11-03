@@ -224,8 +224,8 @@ class TripScreenView(BaseCardRosterView):
             # State 5: Default card preview (Normal Selection)
             filtered_cards = self.get_filtered_cards()
             target_card = self._get_target_card(filtered_cards)
-            scaled_stats = target_card.get("scaled_stats", target_card.get("base_stats", {}))
-            return create_card_embed(target_card, extra_stats=scaled_stats)
+            scaled_stats = target_card["scaled_stats"]
+            return create_card_embed(target_card, extra_stats=scaled_stats, show_quote=False)
 
         # Shared color, image attachment, and return for States 1 through 4
         embed.color = discord.Color.teal()

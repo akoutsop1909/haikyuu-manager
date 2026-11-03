@@ -75,7 +75,7 @@ class TeamScreenView(BaseCardRosterView):
         target_card = self._get_target_card(filtered_cards)
 
         scaled_stats = target_card.get("scaled_stats", target_card.get("base_stats", {}))
-        embed = create_card_embed(target_card, extra_stats=scaled_stats)
+        embed = create_card_embed(target_card, extra_stats=scaled_stats, show_quote=False)
 
         # Team screen checks player trip/exhaustion status locally
         is_on_trip, is_exhausted, exhausted_until = self._check_card_availability(target_card)

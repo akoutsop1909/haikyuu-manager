@@ -145,7 +145,7 @@ class MatchScreenView(BaseCardRosterView):
             if team_data.get(slot) in card_lookup
         }
 
-        embed = create_card_embed(target_card, extra_stats=card_stats)
+        embed = create_card_embed(target_card, extra_stats=card_stats, show_quote=False)
         add_card_metadata_fields(embed, target_card, active_lineup_card_ids=active_lineup_card_ids)
         return embed
 

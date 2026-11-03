@@ -217,7 +217,8 @@ def format_lineup_court_display(lineup_data: dict, user_cards: list[dict], lineu
 def create_card_embed(
     card_data: dict,
     extra_stats: dict | None = None,
-    show_level_info: bool = True
+    show_level_info: bool = True,
+    show_quote: bool = True
 ) -> discord.Embed:
     color_val = int(card_data.get("embed_color", "0xFF6600"), 16)
     rarity = card_data.get("rarity", "R")
@@ -226,9 +227,12 @@ def create_card_embed(
 
     rarity_emoji = RARITY_EMOJIS.get(rarity, "🔵")
 
+    # Only include description if show_quote is True and the quote exists
+    description = f"*{quote}*" if (quote and show_quote) else None
+
     embed = discord.Embed(
         title=f"{rarity_emoji} *({rarity})* {name}",
-        description=f"*{quote}*" if quote else None,
+        description=description,
         color=color_val
     )
 
