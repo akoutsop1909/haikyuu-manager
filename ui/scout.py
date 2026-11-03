@@ -61,7 +61,8 @@ class ScoutScreenView(discord.ui.View):
         self.user_id = user_id
         self.pulled_cards = pulled_cards
         self.balance = balance
-        self.selected_card_data: dict | None = None  # Tracks if user is inspecting a specific pulled card
+        self.state = "scout"  # Can be "scout", "results", "inspect", or "failed"
+        self.selected_card_data: dict | None = None
         self.dropdown: ScoutSelectMenu | None = None
         self._setup_components()
 
@@ -80,8 +81,17 @@ class ScoutScreenView(discord.ui.View):
             embed.set_footer(text=f"Balance: {COIN_EMOJI} {format_number(self.balance)}")
             return embed
 
-        # Determine content dynamically for States 2 & 3
-        if self.pulled_cards:
+        # Determine title, description, and balance value based on active state
+        if self.state == "failed":
+            title = "❌ Scout Failed"
+            description = (
+                f"You don't have enough {COIN_NAME}!\n\n"
+                f"• Required: {COIN_EMOJI} **{self.failed_cost:,}**\n"
+                f"• Your Balance: {COIN_EMOJI} **{self.failed_balance:,}**"
+            )
+            balance_val = self.failed_balance
+
+        elif self.pulled_cards:
             # State 2: 10x Summary View Content
             results_formatted = []
             for idx, c in enumerate(self.pulled_cards, 1):
@@ -118,7 +128,7 @@ class ScoutScreenView(discord.ui.View):
             )
             balance_val = inventory.scout_coins
 
-        # Unified presentation for States 2 & 3
+        # Unified presentation for Failed, 10x Summary, and Main Menu states
         embed = discord.Embed(
             title=title,
             description=description,
@@ -135,7 +145,7 @@ class ScoutScreenView(discord.ui.View):
             self.dropdown = ScoutSelectMenu(self.pulled_cards)
             self.add_item(self.dropdown)
 
-        # Row 1: Scout Buttons
+        # Row 1: Scout Buttons (Always available)
         btn_scout_1 = discord.ui.Button(label="Scout 1", style=discord.ButtonStyle.primary, row=1)
         btn_scout_10 = discord.ui.Button(label="Scout 10", style=discord.ButtonStyle.success, row=1)
 
@@ -145,7 +155,7 @@ class ScoutScreenView(discord.ui.View):
         self.add_item(btn_scout_1)
         self.add_item(btn_scout_10)
 
-        # Row 2: Back Button
+        # Row 2: Back Button (Returns to Main Menu / UserHomeView)
         btn_back = discord.ui.Button(label="Back", style=discord.ButtonStyle.secondary, emoji="⬅️", row=2)
         btn_back.callback = self._handle_back
         self.add_item(btn_back)
@@ -171,12 +181,17 @@ class ScoutScreenView(discord.ui.View):
     async def _handle_scout(self, interaction: discord.Interaction, count: int):
         cost = count * COST_PER_PULL
         inventory = await get_inventory(interaction.user.id)
+        self.selected_card_data = None
 
         if inventory.scout_coins < cost:
-            self._cleanup_dropdown()
-            embed, attachments = self._build_failed_payload(cost, inventory.scout_coins)
-            await interaction.response.send_message(embed=embed, files=attachments, ephemeral=True)
+            await lock_view_ui(self, interaction)
+            self.state = "failed"  # Switch to failure state
+            self.failed_cost = cost
+            self.failed_balance = inventory.scout_coins
+            await self.update_screen(interaction)
             return
+
+        self.state = "scout"
 
         await lock_view_ui(self, interaction)
         pulled_cards = await perform_scout(interaction.user.id, count)
@@ -202,6 +217,7 @@ class ScoutScreenView(discord.ui.View):
             self.selected_card_data = None
 
         await self.update_screen(interaction)
+
     @staticmethod
     def _attach_scout_status_field(embed: discord.Embed, card_data: dict):
         """Helper to append gacha pull status to a card embed."""
@@ -223,30 +239,15 @@ class ScoutScreenView(discord.ui.View):
                 inline=False,
             )
 
-    @staticmethod
-    def _build_failed_payload(cost: int, balance: int) -> tuple[discord.Embed, list[discord.File]]:
-        """Helper to build the ephemeral failure message payload cleanly."""
-        banner_file = get_banner_file("scout_fail")
-        embed = discord.Embed(
-            title="❌ Scout Failed",
-            description=(
-                f"You don't have enough {COIN_NAME}!\n\n"
-                f"• Required: {COIN_EMOJI} **{cost:,}**\n"
-                f"• Your Balance: {COIN_EMOJI} **{balance:,}**"
-            ),
-            color=discord.Color.gold(),
-        )
-        if banner_file:
-            embed.set_image(url=f"attachment://{banner_file.filename}")
-
-        return embed, [banner_file] if banner_file else []
-
     async def _get_screen_payload(self) -> tuple[discord.Embed, list[discord.File]]:
-        """Helper to build embed and attachments mirroring trip.py style."""
         embed = await self.build_embed()
 
-        # Determine attachments based on active state
-        if self.selected_card_data:
+        if self.state == "failed":
+            banner_file = get_banner_file("scout_fail")
+            if banner_file:
+                embed.set_image(url=f"attachment://{banner_file.filename}")
+            attachments = [banner_file] if banner_file else []
+        elif self.selected_card_data:
             image_file = get_card_image_file(self.selected_card_data)
             attachments = [image_file] if image_file else []
         elif self.pulled_cards:
