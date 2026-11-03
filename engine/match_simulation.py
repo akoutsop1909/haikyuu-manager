@@ -1,70 +1,88 @@
 import random
 
+# Standard clockwise rotation order starting from Front-Left (Zone 4) -> ... -> Zone 1 (Server)
+ROTATION_ORDER = [
+    "wing_spiker_1",   # Front Left (Zone 4)
+    "middle_blocker_1",# Front Center (Zone 3)
+    "opposite",        # Front Right (Zone 2)
+    "setter",          # Back Right / Server (Zone 1)
+    "middle_blocker_2",# Back Center (Zone 6)
+    "wing_spiker_2",   # Back Left (Zone 5)
+]
 
-def resolve_serve_phase(server_card: dict, back_row_cards: list[dict]) -> dict:
+def get_current_rotation(team_stats: dict, rotation_step: int = 0) -> dict:
     """
-    Simulates the Serve & Receive phase between a Server and back-row Receivers.
+    Calculates the team's current court rotation, front/back rows,
+    active server, and Libero substitutions based on the rotation step (0-5).
     """
-    server_name = server_card.get("name", "Server")
-    serve_stat = server_card.get("scaled_stats", {}).get("serve", 50)
+    # Shift the rotation order based on the current rotation step
+    offset = rotation_step % len(ROTATION_ORDER)
+    current_lineup = ROTATION_ORDER[offset:] + ROTATION_ORDER[:offset]
 
-    # 1. Select Receiver (Weighted towards Libero)
-    candidates = []
-    weights = []
+    # Front row is the first 3 players (Zones 4, 3, 2), Back row is the last 3 (Zones 1, 6, 5)
+    front_slots = current_lineup[0:3]
+    back_slots = current_lineup[3:6]
 
-    for card in back_row_cards:
-        if not card:
-            continue
-        candidates.append(card)
-        # Liberos cover more ground -> 60% relative weight
-        if card.get("position") == "L":
-            weights.append(60)
-        else:
-            weights.append(20)
+    front_row = {slot: team_stats[slot] for slot in front_slots}
+    back_row = {slot: team_stats[slot] for slot in back_slots}
 
-    if not candidates:
-        raise ValueError("No back-row receivers available!")
+    # Identify the designated server (Zone 1 / first back-row slot) BEFORE libero substitution
+    server_slot = back_slots[0]
 
-    receiver_card = random.choices(candidates, weights=weights, k=1)[0]
-    receiver_name = receiver_card.get("name", "Receiver")
-    receive_stat = receiver_card.get("scaled_stats", {}).get("receive", 50)
-
-    # 2. Compare Stats & Calculate Pass Quality Probability
-    stat_diff = receive_stat - serve_stat
-
-    # Base Ace Chance (Server advantage)
-    ace_chance = max(0.02, 0.08 - (stat_diff * 0.002))
-
-    # Perfect Pass Chance (Receiver advantage)
-    perfect_chance = max(0.15, min(0.80, 0.50 + (stat_diff * 0.005)))
-
-    # Poor Pass Chance
-    poor_chance = max(0.05, min(0.40, 0.20 - (stat_diff * 0.003)))
-
-    # Roll for outcome
-    roll = random.random()
-
-    if roll < ace_chance:
-        outcome = "ACE"
-        description = f"🔥 SERVICE ACE! **{server_name}** scores directly off the serve!"
-        setter_stat_modifier = 0.0
-    elif roll < ace_chance + perfect_chance:
-        outcome = "PERFECT"
-        description = f"🛡️ Perfect pass! **{receiver_name}** digs the serve cleanly to the Setter."
-        setter_stat_modifier = 1.20  # +20% boost to Setter's Set stat
-    elif roll < ace_chance + perfect_chance + poor_chance:
-        outcome = "POOR"
-        description = f"⚠️ Off-system pass! **{receiver_name}** barely keeps **{server_name}**'s serve in play!"
-        setter_stat_modifier = 0.85  # -15% penalty to Setter's Set stat
-    else:
-        outcome = "GOOD"
-        description = f"🏐 Solid receive by **{receiver_name}**. The play continues normally."
-        setter_stat_modifier = 1.00  # Baseline
+    # Libero Substitution Rule:
+    # The Libero replaces whichever Middle Blocker has rotated into the back row.
+    for slot in back_slots:
+        if "middle_blocker" in slot:
+            back_row["libero"] = team_stats["libero"]
+            del back_row[slot]
+            break
 
     return {
-        "outcome": outcome,
-        "server": server_name,
-        "receiver": receiver_name,
-        "description": description,
-        "setter_stat_modifier": setter_stat_modifier
+        "front_row": front_row,
+        "back_row": back_row,
+        "server_slot": server_slot
+    }
+
+
+def run_match_simulation(user_stats: dict, opponent_stats: dict) -> dict:
+    user_score = 0
+    opponent_score = 0
+
+    # 1. State Trackers: Rotation counters start at 0
+    user_rotation_step = 0
+    opp_rotation_step = 0
+
+    serving_team = "user"  # User serves first in rotation 0
+    match_log = []
+
+    # 2. Main Match Loop (Play until 5 points)
+    while user_score < 5 and opponent_score < 5:
+        # Get active formations for this specific rally step
+        user_formation = get_current_rotation(user_stats, user_rotation_step)
+        opp_formation = get_current_rotation(opponent_stats, opp_rotation_step)
+
+        # --- Example Rally Outcome ---
+        # Suppose User is serving, but Opponent wins the point (Side-Out!)
+        if serving_team == "user":
+            opponent_score += 1
+            serving_team = "opponent"
+
+            # Opponent won a side-out -> Opponent team rotates!
+            opp_rotation_step = (opp_rotation_step + 1) % 6
+            match_log.append("Opponent wins side-out and rotates!")
+
+        # Next rally: Suppose Opponent serves, and User wins the point (Side-Out!)
+        else:
+            user_score += 1
+            serving_team = "user"
+
+            # User won a side-out -> User team rotates!
+            user_rotation_step = (user_rotation_step + 1) % 6
+            match_log.append("User wins side-out! Rotating to next formation.")
+
+    return {
+        "winner": "user" if user_score > opponent_score else "opponent",
+        "user_score": user_score,
+        "opponent_score": opponent_score,
+        "match_log": match_log
     }

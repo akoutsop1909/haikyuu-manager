@@ -6,6 +6,7 @@ from ui.utils import lock_view_ui, format_lineup_court_display, format_resonance
 from engine.data_loader import TEAM_CONFIG, STARTING_SLOTS, ALL_SLOTS, POSITION_MAPPING
 from engine.opponent_generator import unpack_opponent_team
 from engine.mechanics_boosts import apply_lineup_boosts, prepare_match_matchup
+from engine.match_simulation import run_match_simulation
 from database import get_lineups, get_inventory, get_user_cards, get_or_create_opponent, consume_match_refresh
 
 DIFFICULTY_EMOJIS = {"Casual": "🌱", "Easy": "👟", "Normal": "⚡", "Hard": "💥", "Nightmare": "💀"}
@@ -59,6 +60,7 @@ class MatchScreenView(BaseCardRosterView):
         self.selected_difficulty = "Normal"
         self.current_opponent = initial_opponent or {}
         self.match_refreshes = match_refreshes
+        self.latest_match_result: dict | None = None  # <--- Track match results here
         self._setup_components()
 
     @classmethod
@@ -80,13 +82,14 @@ class MatchScreenView(BaseCardRosterView):
         return [card_lookup[cid] for slot in ALL_SLOTS if (cid := team_data.get(slot)) and cid in card_lookup]
 
     async def build_content(self) -> str | None:
-        if self.state == "opponent_select":
-            return None  # No court display text needed on the opponent screen
+        if self.state in ("opponent_select", "match_results"):
+            return None  # No court display text needed on opponent or results screens
 
         team_data = self.lineups.get(self.selected_lineup_index, {})
         return format_lineup_court_display(team_data, self.user_cards, self.selected_lineup_index)
 
     async def build_embed(self) -> discord.Embed | None:
+        # State 1: Opponent Scouting & Selection
         if self.state == "opponent_select":
             diff_emoji = DIFFICULTY_EMOJIS[self.selected_difficulty]
 
@@ -97,7 +100,7 @@ class MatchScreenView(BaseCardRosterView):
             ctx = calculate_team_context(slot_to_id, cards_list)
 
             # 3. Format clean team info values
-            synergy_val = f"({ctx['active_synergy_school']})" if ctx['active_synergy_school'] else "(None)"
+            synergy_val = f"{ctx['active_synergy_school']}" if ctx['active_synergy_school'] else "None"
             specialty_val = ctx['active_specialty_name']
             bonds_val = ctx['active_bonds_count']
 
@@ -124,10 +127,33 @@ class MatchScreenView(BaseCardRosterView):
                     )
 
             embed.add_field(name="🎽 Opponent Lineup", value="\n".join(player_lines), inline=False)
+            return embed
+
+        # State 2: Post-Match Results Screen
+        elif self.state == "match_results":
+            res = self.latest_match_result or {}
+            winner = res.get("winner", "unknown").capitalize()
+            user_score = res.get("user_score", 0)
+            opp_score = res.get("opponent_score", 0)
+            match_logs = res.get("match_log", [])
+
+            embed = discord.Embed(
+                title="🏆 Match Results",
+                description=(
+                    f"**Winner:** {winner} 🎉\n\n"
+                    f"📊 **Final Score:**\n"
+                    f"Your Team `{user_score}` - `{opp_score}` Opponent Team"
+                ),
+                color=discord.Color.gold(),
+            )
+
+            if match_logs:
+                log_text = "\n".join([f"• {log}" for log in match_logs])
+                embed.add_field(name="📜 Match Simulation Log", value=log_text, inline=False)
 
             return embed
 
-        # State 2: Your existing lineup embed logic
+        # State 3: Lineup Selection & Card Preview (Default Fallthrough)
         filtered_cards = self.get_filtered_cards()
         target_card = self._get_target_card(filtered_cards)
 
@@ -198,6 +224,17 @@ class MatchScreenView(BaseCardRosterView):
             self.add_item(btn_confirm)
             self.add_item(btn_back_match)
 
+        elif self.state == "match_results":
+            # Row 0: Post-Match Actions (Play Again & Back to Menu)
+            btn_play_again = discord.ui.Button(label="Play Again", style=discord.ButtonStyle.success, emoji="⚔️", row=0)
+            btn_play_again.callback = self._handle_play_again
+
+            btn_back_menu = discord.ui.Button(label="Back to Menu", style=discord.ButtonStyle.secondary, emoji="⬅️", row=0)
+            btn_back_menu.callback = self._handle_back
+
+            self.add_item(btn_play_again)
+            self.add_item(btn_back_menu)
+
     async def update_screen(self, interaction: discord.Interaction):
         self.lineups, self.current_opponent, inventory = await asyncio.gather(
             get_lineups(self.user_id),
@@ -227,24 +264,33 @@ class MatchScreenView(BaseCardRosterView):
         await get_or_create_opponent(self.user_id, self.selected_difficulty, force_regenerate=True)
         await self.update_screen(interaction)
 
+    async def _handle_play_again(self, interaction: discord.Interaction):
+        await lock_view_ui(self, interaction)
+        # Reset back to opponent selection and regenerate a fresh opponent
+        self.state = "opponent_select"
+        self.current_opponent = await get_or_create_opponent(self.user_id, self.selected_difficulty, force_regenerate=True)
+        await self.update_screen(interaction)
+
     async def confirm_lineup_callback(self, interaction: discord.Interaction):
         await lock_view_ui(self, interaction)
         team_data = self.lineups.get(self.selected_lineup_index, {})
 
-        # Offload the entire calculation, snapshotting, and debuff pipeline to the engine layer
+        # 1. Calculate stats and apply debuffs
         user_stats, opponent_stats = prepare_match_matchup(team_data, self.user_cards, self.current_opponent)
 
-        # Pass `user_boosted_stats` and `opponent_boosted_stats` straight into your match simulation!
-        await interaction.followup.send(
-            f"Lineup confirmed for **{self.selected_difficulty}** difficulty match! Symmetrical debuffs applied.",
-            ephemeral=True
-        )
+        # 2. Run the match simulation and save it to the view instance
+        self.latest_match_result = run_match_simulation(user_stats, opponent_stats)
+
+        # 3. Transition state to match results and refresh the interface
+        self.state = "match_results"
+        self.selected_card_id = None
+        await self.update_screen(interaction)
 
     async def _get_screen_payload(self) -> tuple[str | None, discord.Embed | None, list[discord.File]]:
         content = await self.build_content()
         embed = await self.build_embed()
 
-        if self.state == "opponent_select":
+        if self.state in ("opponent_select", "match_results"):
             attachments = []
         else:
             attachments = self._get_target_card_attachments() if embed else []
