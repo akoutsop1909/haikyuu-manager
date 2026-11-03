@@ -17,7 +17,7 @@ def get_current_rotation(team_stats: dict, rotation_step: int = 0) -> dict:
     """
     # Shift the rotation order based on the current rotation step
     offset = rotation_step % len(ROTATION_ORDER)
-    current_lineup = ROTATION_ORDER[offset:] + ROTATION_ORDER[:offset]
+    current_lineup = ROTATION_ORDER[-offset:] + ROTATION_ORDER[:-offset]
 
     # Front row is the first 3 players (Zones 4, 3, 2), Back row is the last 3 (Zones 1, 6, 5)
     front_slots = current_lineup[0:3]
@@ -26,23 +26,28 @@ def get_current_rotation(team_stats: dict, rotation_step: int = 0) -> dict:
     front_row = {slot: team_stats[slot] for slot in front_slots}
     back_row = {slot: team_stats[slot] for slot in back_slots}
 
-    # Identify the designated server (Zone 1 / first back-row slot) BEFORE libero substitution
+    # Identify the designated server (Zone 1 / first back-row slot)
     server_slot = back_slots[0]
 
     # Libero Substitution Rule:
-    # The Libero replaces whichever Middle Blocker has rotated into the back row.
+    # The Libero replaces a Middle Blocker in the back row,
+    # EXCEPT when that Middle Blocker is in Zone 1 (the server position).
     for slot in back_slots:
         if "middle_blocker" in slot:
-            back_row["libero"] = team_stats["libero"]
-            del back_row[slot]
-            break
+            # If the Middle Blocker is currently the server, they must serve (Libero sits out)
+            if slot == server_slot:
+                break
+            else:
+                # Otherwise (they are in Zone 6 or 5), the Libero subs in for them
+                back_row["libero"] = team_stats["libero"]
+                del back_row[slot]
+                break
 
     return {
         "front_row": front_row,
         "back_row": back_row,
         "server_slot": server_slot
     }
-
 
 def run_match_simulation(user_stats: dict, opponent_stats: dict) -> dict:
     user_score = 0
