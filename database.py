@@ -310,52 +310,49 @@ async def claim_daily(user_id: int) -> DailyClaim:
 
     async with pool.acquire() as conn:
         async with conn.transaction():
-            row_time = await conn.fetchrow("""
+            # Fetch user data and evaluate database dates entirely inside PostgreSQL
+            row = await conn.fetchrow("""
                 SELECT 
-                    NOW() AS db_now,
+                    total_logins,
+                    (NOW() AT TIME ZONE current_setting('TimeZone'))::DATE AS today_date,
+                    (last_daily_claim AT TIME ZONE current_setting('TimeZone'))::DATE AS last_claim_date,
                     EXTRACT(EPOCH FROM (
                         date_trunc('day', NOW() AT TIME ZONE current_setting('TimeZone')) + INTERVAL '1 day'
-                    ) AT TIME ZONE current_setting('TimeZone'))::BIGINT AS next_reset_ts;
-            """)
+                    ) AT TIME ZONE current_setting('TimeZone'))::BIGINT AS next_reset_ts
+                FROM users WHERE user_id = $1
+            """, user_id)
 
-            db_now = row_time["db_now"]
-            next_reset_timestamp = int(row_time["next_reset_ts"])
+            total_logins = row["total_logins"]
+            today_date = row["today_date"]
+            last_claim_date = row["last_claim_date"]
+            next_reset_timestamp = int(row["next_reset_ts"])
 
-            row = await conn.fetchrow(
-                "SELECT last_daily_claim, total_logins FROM users WHERE user_id = $1",
-                user_id
-            )
+            # Compare pure database dates directly
+            can_claim = last_claim_date is None or today_date > last_claim_date
 
-            if row:
-                last_claim = row["last_daily_claim"]
-                total_logins = row["total_logins"] or 0
+            if can_claim:
+                scout_coins = DAILY_REWARD["scout_coins"]
+                practice_balls = DAILY_REWARD["practice_balls"]
 
-                can_claim = True if last_claim is None else db_now.date() > last_claim.date()
+                total_logins += 1
+                claimed = True
 
-                if can_claim:
-                    scout_coins = DAILY_REWARD["scout_coins"]
-                    practice_balls = DAILY_REWARD["practice_balls"]
-
-                    total_logins += 1
-                    claimed = True
-
-                    # Both match passes and refreshes hard-reset to their max caps daily
-                    await conn.execute("""
-                        UPDATE users 
-                        SET scout_coins = scout_coins + $1,
-                            practice_balls = practice_balls + $2,
-                            match_passes = $3,
-                            match_refreshes = $4,
-                            total_logins = total_logins + 1,
-                            last_daily_claim = $5
-                        WHERE user_id = $6
-                    """,
-                    scout_coins,
-                    practice_balls,
-                    DAILY_REWARD["match_passes_cap"],  # Hard reset to 5
-                    DAILY_REWARD["match_refreshes_cap"], # Hard reset to 10
-                    db_now,
-                    user_id)
+                # Update user and stamp with the database's timestamp
+                await conn.execute("""
+                    UPDATE users 
+                    SET scout_coins = scout_coins + $1,
+                        practice_balls = practice_balls + $2,
+                        match_passes = $3,
+                        match_refreshes = $4,
+                        total_logins = total_logins + 1,
+                        last_daily_claim = NOW()
+                     WHERE user_id = $5
+                """,
+                scout_coins,
+                practice_balls,
+                DAILY_REWARD["match_passes_cap"],
+                DAILY_REWARD["match_refreshes_cap"],
+                user_id)
 
     return DailyClaim(
         claimed=claimed,
@@ -375,20 +372,22 @@ async def claim_birthday(user_id: int) -> BirthdayClaim:
 
     async with pool.acquire() as conn:
         async with conn.transaction():
-            # 1. Fetch current database time, today's date, AND tomorrow's date
+            # 1. Fetch database timestamp, formatted strings, and pure database dates entirely in SQL
             row = await conn.fetchrow("""
                 SELECT 
                     NOW() AS db_now,
                     TO_CHAR(NOW() AT TIME ZONE current_setting('TimeZone'), 'MM-DD') AS db_today_mm_dd,
                     TO_CHAR((NOW() AT TIME ZONE current_setting('TimeZone')) + INTERVAL '1 day', 'MM-DD') AS db_tomorrow_mm_dd,
-                    last_birthday_claim 
+                    (NOW() AT TIME ZONE current_setting('TimeZone'))::DATE AS today_date,
+                    (last_birthday_claim AT TIME ZONE current_setting('TimeZone'))::DATE AS last_claim_date
                 FROM users WHERE user_id = $1
             """, user_id)
 
             db_now = row["db_now"]
             today_str = row["db_today_mm_dd"]
             tomorrow_str = row["db_tomorrow_mm_dd"]
-            last_claim = row["last_birthday_claim"]
+            today_date = row["today_date"]
+            last_claim_date = row["last_claim_date"]
 
             # 2. Check for tomorrow's birthdays (Direct Lookup)
             seen_upcoming = set()
@@ -398,8 +397,8 @@ async def claim_birthday(user_id: int) -> BirthdayClaim:
                     seen_upcoming.add(cname)
                     birthdays_tomorrow.append(cname)
 
-            # 3. Check if user already claimed today
-            can_claim = True if last_claim is None else db_now.date() > last_claim.date()
+            # 3. Check if user already claimed today using pure database dates
+            can_claim = last_claim_date is None or today_date > last_claim_date
 
             # 4. Check for today's birthdays (Direct Lookup)
             today_cards = BIRTHDAYS_BY_DATE.get(today_str, [])

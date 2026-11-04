@@ -22,16 +22,18 @@ class UserHomeView(discord.ui.View):
 
     async def build_embed(self, interaction: discord.Interaction) -> discord.Embed:
         is_new_user = await register_user(self.user_id)
-        daily = await claim_daily(self.user_id)
 
-        birthday, inventory = await asyncio.gather(
-            claim_birthday(self.user_id),
-            get_inventory(self.user_id)
+        daily, birthday = await asyncio.gather(
+            claim_daily(self.user_id),
+            claim_birthday(self.user_id)
         )
+
+        inventory = await get_inventory(self.user_id)
 
         if is_new_user:
             welcome_text = (
                 f"Welcome to the club, **{interaction.user.display_name}**! "
+                f"Time to raise a powerhouse team and make it to the Nationals."
                 f"Time to raise a powerhouse team and make it to the Nationals."
             )
         else:
