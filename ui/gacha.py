@@ -34,7 +34,6 @@ class UserHomeView(discord.ui.View):
             welcome_text = (
                 f"Welcome to the club, **{interaction.user.display_name}**! "
                 f"Time to raise a powerhouse team and make it to the Nationals."
-                f"Time to raise a powerhouse team and make it to the Nationals."
             )
         else:
             welcome_text = (
