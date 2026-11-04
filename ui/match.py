@@ -275,13 +275,21 @@ class MatchScreenView(BaseCardRosterView):
         await lock_view_ui(self, interaction)
         team_data = self.lineups.get(self.selected_lineup_index, {})
 
-        # 1. Calculate stats and apply debuffs
-        user_stats, opponent_stats = prepare_match_matchup(team_data, self.user_cards, self.current_opponent)
+        # 1. Unpack the computer-generated opponent data into lineup slots and card lists
+        opp_lineup, opp_cards_list, opp_slot_to_id = unpack_opponent_team(self.current_opponent)
 
-        # 2. Run the match simulation and save it to the view instance
+        # 2. Calculate stats and apply debuffs using the newly unpacked opponent format
+        user_stats, opponent_stats = prepare_match_matchup(
+            user_lineup_data=team_data,
+            user_cards=self.user_cards,
+            opponent_lineup_data=opp_slot_to_id,
+            opponent_cards=opp_cards_list
+        )
+
+        # 3. Run the match simulation and save it to the view instance
         self.latest_match_result = run_match_simulation(user_stats, opponent_stats)
 
-        # 3. Transition state to match results and refresh the interface
+        # 4. Transition state to match results and refresh the interface
         self.state = "match_results"
         self.selected_card_id = None
         await self.update_screen(interaction)

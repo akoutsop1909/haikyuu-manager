@@ -1,21 +1,25 @@
-import copy
 from collections import defaultdict
 from engine.data_loader import SPECIALTIES_BY_ID, BONDS_BY_ID, SYNERGIES_BY_ID, TEAM_CONFIG, STARTING_SLOTS, ALL_SLOTS
-from engine.opponent_generator import unpack_opponent_team
 
 MIN_SYNERGY_PLAYERS = TEAM_CONFIG["min_synergy_players"]
 
-def prepare_match_matchup(user_lineup_data: dict, user_cards: list[dict], opponent_data: dict) -> tuple[dict, dict]:
+
+def prepare_match_matchup(
+        user_lineup_data: dict,
+        user_cards: list[dict],
+        opponent_lineup_data: dict,
+        opponent_cards: list[dict]
+) -> tuple[dict, dict]:
     """Calculates final user and opponent stats and applies symmetrical debuffs simultaneously."""
+
     # 1. User stats calculation
     user_stats = apply_lineup_boosts(user_lineup_data, user_cards)
 
-    # 2. Opponent stats calculation
-    opponent_lineup, opponent_cards, opponent_card_data = unpack_opponent_team(opponent_data)
-    opponent_stats = apply_lineup_boosts(opponent_card_data, opponent_cards)
+    # 2. Opponent stats calculation (now uses unpacked opponent data directly)
+    opponent_stats = apply_lineup_boosts(opponent_lineup_data, opponent_cards)
 
     # 3. Apply symmetrical debuffs directly using the live stat dictionaries
-    user_stats_final = apply_setter_debuff(user_stats, opponent_card_data, opponent_stats, opponent_cards)
+    user_stats_final = apply_setter_debuff(user_stats, opponent_lineup_data, opponent_stats, opponent_cards)
     opponent_stats_final = apply_setter_debuff(opponent_stats, user_lineup_data, user_stats, user_cards)
 
     return user_stats_final, opponent_stats_final
