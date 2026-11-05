@@ -1,20 +1,17 @@
 import random
 
-# Standard clockwise rotation order starting from Front-Left (Zone 4) -> ... -> Zone 1 (Server)
 ROTATION_ORDER = [
-    "wing_spiker_1",   # Front Left (Zone 4)
-    "middle_blocker_1",# Front Center (Zone 3)
-    "opposite",        # Front Right (Zone 2)
-    "setter",          # Back Right / Server (Zone 1)
-    "middle_blocker_2",# Back Center (Zone 6)
-    "wing_spiker_2",   # Back Left (Zone 5)
+    "opposite",         # Zone 2 (Front-Right)
+    "middle_blocker_1", # Zone 3 (Front-Center)
+    "wing_spiker_1",    # Zone 4 (Front-Left)
+    "setter",           # Zone 1 (Back-Right / Server)
+    "middle_blocker_2", # Zone 6 (Back-Center)
+    "wing_spiker_2",    # Zone 5 (Back-Left)
 ]
 
 def get_current_rotation(team_stats: dict, rotation_step: int = 0) -> dict:
-    """
-    Calculates the team's current court rotation, front/back rows,
-    active server, and Libero substitutions based on the rotation step (0-5).
-    """
+    """Calculates the team's current court rotation, front/back rows, and active server."""
+
     # Shift the rotation order based on the current rotation step
     offset = rotation_step % len(ROTATION_ORDER)
     current_lineup = ROTATION_ORDER[-offset:] + ROTATION_ORDER[:-offset]
@@ -23,8 +20,8 @@ def get_current_rotation(team_stats: dict, rotation_step: int = 0) -> dict:
     front_slots = current_lineup[0:3]
     back_slots = current_lineup[3:6]
 
-    front_row = {slot: team_stats[slot] for slot in front_slots}
-    back_row = {slot: team_stats[slot] for slot in back_slots}
+    front_row = {slot: team_stats[slot] for slot in front_slots if slot in team_stats}
+    back_row = {slot: team_stats[slot] for slot in back_slots if slot in team_stats}
 
     # Identify the designated server (Zone 1 / first back-row slot)
     server_slot = back_slots[0]
@@ -34,11 +31,9 @@ def get_current_rotation(team_stats: dict, rotation_step: int = 0) -> dict:
     # EXCEPT when that Middle Blocker is in Zone 1 (the server position).
     for slot in back_slots:
         if "middle_blocker" in slot:
-            # If the Middle Blocker is currently the server, they must serve (Libero sits out)
             if slot == server_slot:
                 break
             else:
-                # Otherwise (they are in Zone 6 or 5), the Libero subs in for them
                 back_row["libero"] = team_stats["libero"]
                 del back_row[slot]
                 break
@@ -49,41 +44,113 @@ def get_current_rotation(team_stats: dict, rotation_step: int = 0) -> dict:
         "server_slot": server_slot
     }
 
+
+def serve_phase(serving_team_stats: dict, receiving_team_stats: dict, serving_rotation_step: int) -> dict:
+    serving_formation = get_current_rotation(serving_team_stats, serving_rotation_step)
+    server_slot = serving_formation["server_slot"]
+    server_card = serving_team_stats[server_slot]
+    serve_power = server_card["serve"]
+    server_name = server_card["name"]
+
+    receiving_formation = get_current_rotation(receiving_team_stats, 0)
+    back_row_receivers = receiving_formation["back_row"].values()
+    receives = [card["receive"] for card in back_row_receivers]
+    best_receive = max(receives)
+    # Libero influences 35% of the defense, the overall team average covers 65%
+    avg_receive = (best_receive * 0.35) + (sum(receives) * 0.65 / len(receives))
+
+    server_roll = serve_power * random.uniform(0.85, 1.15)
+    receiver_roll = avg_receive * random.uniform(0.85, 1.15)
+
+    if server_roll >= receiver_roll * 1.22:
+        return {
+            "outcome": "ace",
+            "server": server_name,
+            "message": f"Service Ace by **{server_name}**!"
+        }
+    elif server_roll < serve_power * 0.88:
+        return {
+            "outcome": "error",
+            "server": server_name,
+            "message": f"Service error by **{server_name}**!"
+        }
+    else:
+        if receiver_roll >= server_roll * 1.18:
+            return {
+                "outcome": "perfect_receive",
+                "server": server_name,
+                "message": f"Powerful serve by **{server_name}**, but swallowed up by a perfect receive!"
+            }
+        elif server_roll >= receiver_roll * 1.08:
+            return {
+                "outcome": "bad_receive",
+                "server": server_name,
+                "message": f"Heavy serve by **{server_name}**! The defense scrambles to keep it alive."
+            }
+        else:
+            return {
+                "outcome": "normal_receive",
+                "server": server_name,
+                "message": f"Successful serve by **{server_name}**, cleanly received by opponent."
+            }
+
+
 def run_match_simulation(user_stats: dict, opponent_stats: dict) -> dict:
     user_score = 0
     opponent_score = 0
 
-    # 1. State Trackers: Rotation counters start at 0
     user_rotation_step = 0
     opp_rotation_step = 0
 
-    serving_team = "user"  # User serves first in rotation 0
+    serving_team = "user"  # User serves first
     match_log = []
 
-    # 2. Main Match Loop (Play until 5 points)
     while user_score < 5 and opponent_score < 5:
-        # Get active formations for this specific rally step
-        user_formation = get_current_rotation(user_stats, user_rotation_step)
-        opp_formation = get_current_rotation(opponent_stats, opp_rotation_step)
-
-        # --- Example Rally Outcome ---
-        # Suppose User is serving, but Opponent wins the point (Side-Out!)
         if serving_team == "user":
-            opponent_score += 1
-            serving_team = "opponent"
-
-            # Opponent won a side-out -> Opponent team rotates!
-            opp_rotation_step = (opp_rotation_step + 1) % 6
-            match_log.append("Opponent wins side-out and rotates!")
-
-        # Next rally: Suppose Opponent serves, and User wins the point (Side-Out!)
+            result = serve_phase(user_stats, opponent_stats, user_rotation_step)
         else:
-            user_score += 1
-            serving_team = "user"
+            result = serve_phase(opponent_stats, user_stats, opp_rotation_step)
 
-            # User won a side-out -> User team rotates!
-            user_rotation_step = (user_rotation_step + 1) % 6
-            match_log.append("User wins side-out! Rotating to next formation.")
+        match_log.append(result["message"])
+
+        # Temporary resolution logic for the rally based on serve outcome
+        if result["outcome"] == "ace":
+            if serving_team == "user":
+                user_score += 1
+            else:
+                opponent_score += 1
+            # Ace means no side-out change, serving team keeps serving, no rotation
+
+        elif result["outcome"] == "error":
+            # Serving team messed up -> Point to the other team + Side-out & Rotate!
+            if serving_team == "user":
+                opponent_score += 1
+                serving_team = "opponent"
+                opp_rotation_step = (opp_rotation_step + 1) % 6
+                match_log.append("Side-out! Opponent rotates.")
+            else:
+                user_score += 1
+                serving_team = "user"
+                user_rotation_step = (user_rotation_step + 1) % 6
+                match_log.append("Side-out! User rotates.")
+
+        else:
+            # In play placeholder (we will add the Spike/Block phase here next!)
+            # For now, alternate point winner randomly on standard plays
+            if random.choice([True, False]):
+                if serving_team == "user":
+                    user_score += 1
+                else:
+                    opponent_score += 1
+            else:
+                if serving_team == "user":
+                    opponent_score += 1
+                    serving_team = "opponent"
+                    opp_rotation_step = (opp_rotation_step + 1) % 6
+                else:
+                    user_score += 1
+                    serving_team = "user"
+                    user_rotation_step = (user_rotation_step + 1) % 6
 
     return {
         "winner": "user" if user_score > opponent_score else "opponent",

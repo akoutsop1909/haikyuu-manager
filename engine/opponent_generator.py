@@ -19,7 +19,6 @@ def _build_opponent_card_info(card: dict, config: dict, level: int = None, reson
     min_lvl, max_lvl = config["level_range"]
     min_res, max_res = config["resonance_range"]
 
-    # Use provided level/resonance if given, otherwise roll random ones
     card_level = level if level is not None else random.randint(min_lvl, max_lvl)
     card_resonance = resonance if resonance is not None else random.randint(min_res, max_res)
 
@@ -69,18 +68,15 @@ def generate_opponent_team(difficulty: str) -> dict:
         for bond in BONDS_BY_ID.values():
             req_ids = bond["required_players"]
 
-            # Ensure all required players exist and match allowed rarities
             if all(cid in CARDS_BY_ID and CARDS_BY_ID[cid]["rarity"] in allowed_rarities for cid in req_ids):
-
-                # Filter bond size dynamically based on config configuration
                 if len(req_ids) not in allowed_bond_sizes:
                     continue
 
                 if selected_school:
                     if all(CARDS_BY_ID[cid]["school"] == selected_school for cid in req_ids):
-                        synergy_bonds.append(req_ids)  # Pure school bond
+                        synergy_bonds.append(req_ids)
                     else:
-                        other_bonds.append(req_ids)  # Cross-school bond
+                        other_bonds.append(req_ids)
                 else:
                     synergy_bonds.append(req_ids)
 
@@ -97,16 +93,14 @@ def generate_opponent_team(difficulty: str) -> dict:
                 chosen_bonds.append(forced_synergy_bond)
                 remaining_slots -= mandatory_synergy_size
 
-        # 2. Limit additional synergy bonds so we don't fill 100% of the team with one school
-        max_synergy_bonds_allowed = 1
-        if remaining_slots > 0:
-            allowed_syn_count = min(remaining_slots, max_synergy_bonds_allowed)
-            taken_synergy = synergy_bonds[:allowed_syn_count]
+        # 2. Fill remaining slots with same-school synergy bonds if forced
+        if remaining_slots > 0 and selected_school:
+            taken_synergy = synergy_bonds[:remaining_slots]
             chosen_bonds.extend(taken_synergy)
             remaining_slots -= len(taken_synergy)
 
-        # 3. Fill the absolute remainder of slots with cross-school / other bonds
-        if remaining_slots > 0:
+        # 3. Fill absolute remainder with other bonds only if school synergy isn't forced
+        if remaining_slots > 0 and not selected_school:
             taken_others = other_bonds[:remaining_slots]
             chosen_bonds.extend(taken_others)
             remaining_slots -= len(taken_others)
@@ -172,46 +166,43 @@ def generate_opponent_team(difficulty: str) -> dict:
         opponent_lineup[slot] = card_info
         opponent_cards_list.append(card_info)
 
-        # 3. Optional Pinch Server Evaluation
-        if has_pinch_server:
-            ps_candidates = [
-                CARDS_BY_ID[cid] for rarity in allowed_rarities
-                for cid in CARDS_BY_RARITY.get(rarity, [])
-                if cid not in assigned_card_ids
+    # 3. Optional Pinch Server Evaluation (Moved outside starting slots loop)
+    if has_pinch_server:
+        ps_candidates = [
+            CARDS_BY_ID[cid] for rarity in allowed_rarities
+            for cid in CARDS_BY_RARITY.get(rarity, [])
+            if cid not in assigned_card_ids
+        ]
+
+        if ps_candidates:
+            chosen_ps_card = random.choice(ps_candidates)
+
+            ps_level = random.randint(min_lvl, max_lvl)
+            ps_resonance = random.randint(min_res, max_res)
+            ps_scaled_stats = calculate_card_stats(
+                base_stats=chosen_ps_card["base_stats"],
+                level=ps_level,
+                rarity=chosen_ps_card["rarity"],
+                resonance=ps_resonance
+            )
+
+            eligible_starting_slots = [
+                (s_name, s_data) for s_name, s_data in opponent_lineup.items()
+                if s_data["position"] == "MB"
             ]
 
-            if ps_candidates:
-                chosen_ps_card = random.choice(ps_candidates)
-
-                # Pre-roll stats to check against Middle Blockers
-                ps_level = random.randint(min_lvl, max_lvl)
-                ps_resonance = random.randint(min_res, max_res)
-                ps_scaled_stats = calculate_card_stats(
-                    base_stats=chosen_ps_card["base_stats"],
-                    level=ps_level,
-                    rarity=chosen_ps_card["rarity"],
-                    resonance=ps_resonance
+            if eligible_starting_slots:
+                weakest_slot, weakest_data = min(
+                    eligible_starting_slots,
+                    key=lambda item: item[1]["scaled_stats"]["serve"]
                 )
 
-                eligible_starting_slots = [
-                    (s_name, s_data) for s_name, s_data in opponent_lineup.items()
-                    if s_data["position"] == "MB"
-                ]
-
-                if eligible_starting_slots:
-                    weakest_slot, weakest_data = min(
-                        eligible_starting_slots,
-                        key=lambda item: item[1]["scaled_stats"]["serve"]
+                if ps_scaled_stats["serve"] > weakest_data["scaled_stats"]["serve"]:
+                    ps_card_info = _build_opponent_card_info(
+                        chosen_ps_card, config, level=ps_level, resonance=ps_resonance
                     )
-
-                    # Only use pinch server if his serve stat is strictly higher than the weakest starter's serve
-                    if ps_scaled_stats["serve"] > weakest_data["scaled_stats"]["serve"]:
-                        # Pass the pre-rolled level and resonance so it doesn't re-roll!
-                        ps_card_info = _build_opponent_card_info(
-                            chosen_ps_card, config, level=ps_level, resonance=ps_resonance
-                        )
-                        opponent_lineup["pinch_server"] = ps_card_info
-                        opponent_cards_list.append(ps_card_info)
+                    opponent_lineup["pinch_server"] = ps_card_info
+                    opponent_cards_list.append(ps_card_info)
 
     return {
         "lineup": opponent_lineup,
