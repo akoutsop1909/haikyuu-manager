@@ -74,7 +74,7 @@ class ScoutScreenView(discord.ui.View):
         return view, None, embed, attachments
 
     async def build_embed(self) -> discord.Embed:
-        # State 1: Inspecting a specific card from 10x results
+        # State 1: Inspecting a specific card from x10 results
         if self.selected_card_data:
             embed = create_card_embed(self.selected_card_data, show_level_info=False)
             self._attach_scout_status_field(embed, self.selected_card_data)
@@ -92,7 +92,7 @@ class ScoutScreenView(discord.ui.View):
             balance_val = self.failed_balance
 
         elif self.pulled_cards:
-            # State 2: 10x Summary View Content
+            # State 2: x10 Summary View Content
             results_formatted = []
             for idx, c in enumerate(self.pulled_cards, 1):
                 status_tag = ""
@@ -107,7 +107,7 @@ class ScoutScreenView(discord.ui.View):
                 line = f"`{idx:02d}.` **[{c['position']}]** {c['name']} *({c['rarity']})*{status_tag}"
                 results_formatted.append(line)
 
-            title = "🔍 Scout Results (10x Pull)"
+            title = "🔍 Scout Results (x10 Pull)"
             description = "\n".join(results_formatted) + "\n\n👇 Select a player from the dropdown below to view details!"
             balance_val = self.balance
 
@@ -122,8 +122,8 @@ class ScoutScreenView(discord.ui.View):
             title = "🔍 Player Scouting"
             description = (
                 "Scout elite players across schools to build your dream lineup!\n\n"
-                f"• Scout 1: {COIN_EMOJI} **{COST_PER_PULL:,}**\n"
-                f"• Scout 10: {COIN_EMOJI} **{cost_10x:,}**\n\n"
+                f"• Scout x1: {COIN_EMOJI} **{COST_PER_PULL:,}**\n"
+                f"• Scout x10: {COIN_EMOJI} **{cost_10x:,}**\n\n"
                 f"📊 **Drop Rates:** {rates_str}"
             )
             balance_val = inventory.scout_coins
@@ -146,8 +146,8 @@ class ScoutScreenView(discord.ui.View):
             self.add_item(self.dropdown)
 
         # Row 1: Scout Buttons (Always available)
-        btn_scout_1 = discord.ui.Button(label="Scout 1", style=discord.ButtonStyle.primary, row=1)
-        btn_scout_10 = discord.ui.Button(label="Scout 10", style=discord.ButtonStyle.success, row=1)
+        btn_scout_1 = discord.ui.Button(label="Scout x1", style=discord.ButtonStyle.primary, row=1)
+        btn_scout_10 = discord.ui.Button(label="Scout x10", style=discord.ButtonStyle.success, row=1)
 
         btn_scout_1.callback = lambda i: self._handle_scout(i, count=1)
         btn_scout_10.callback = lambda i: self._handle_scout(i, count=10)
@@ -208,11 +208,11 @@ class ScoutScreenView(discord.ui.View):
         self._cleanup_dropdown()
 
         if count == 1:
-            # 1x pull: Show the card directly without any dropdown/summary
+            # x1 pull: Show the card directly without any dropdown/summary
             self.pulled_cards = None
             self.selected_card_data = pulled_cards[0]
         else:
-            # 10x pull: Show the summary list and dropdown
+            # x10 pull: Show the summary list and dropdown
             self.pulled_cards = pulled_cards
             self.selected_card_data = None
 
