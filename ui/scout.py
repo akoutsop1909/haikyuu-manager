@@ -1,6 +1,5 @@
 import discord
 
-from ui.gacha import UserHomeView
 from ui.utils import lock_view_ui, create_card_embed, get_card_image_file, get_banner_file, format_resonance_stars, \
     format_resonance_badge, format_number
 from engine.data_loader import SCOUT_CONFIG, ITEM_METADATA
@@ -174,6 +173,7 @@ class ScoutScreenView(discord.ui.View):
 
     async def _handle_back(self, interaction: discord.Interaction):
         await lock_view_ui(self, interaction)
+        from ui.gacha import UserHomeView
         home_view = UserHomeView(self.user_id)
         embed = await home_view.build_embed(interaction)
         await interaction.edit_original_response(content=None, embed=embed, view=home_view, attachments=[])
