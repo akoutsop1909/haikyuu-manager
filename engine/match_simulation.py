@@ -20,8 +20,8 @@ def get_current_rotation(team_stats: dict, rotation_step: int = 0) -> dict:
     front_slots = current_lineup[0:3]
     back_slots = current_lineup[3:6]
 
-    front_row = {slot: team_stats[slot] for slot in front_slots if slot in team_stats}
-    back_row = {slot: team_stats[slot] for slot in back_slots if slot in team_stats}
+    front_row = {slot: team_stats[slot] for slot in front_slots}
+    back_row = {slot: team_stats[slot] for slot in back_slots}
 
     # Identify the designated server (Zone 1 / first back-row slot)
     server_slot = back_slots[0]
@@ -45,54 +45,53 @@ def get_current_rotation(team_stats: dict, rotation_step: int = 0) -> dict:
     }
 
 
-def serve_phase(serving_team_stats: dict, receiving_team_stats: dict, serving_rotation_step: int) -> dict:
+def serve_phase(serving_team_stats: dict, receiving_team_stats: dict, serving_rotation_step: int,
+                receiving_rotation_step: int) -> dict:
     serving_formation = get_current_rotation(serving_team_stats, serving_rotation_step)
     server_slot = serving_formation["server_slot"]
     server_card = serving_team_stats[server_slot]
     serve_power = server_card["serve"]
     server_name = server_card["name"]
 
-    receiving_formation = get_current_rotation(receiving_team_stats, 0)
+    # Use the receiving team's actual rotation step instead of hardcoding 0!
+    receiving_formation = get_current_rotation(receiving_team_stats, receiving_rotation_step)
     back_row_receivers = receiving_formation["back_row"].values()
     receives = [card["receive"] for card in back_row_receivers]
     best_receive = max(receives)
+
     # Libero influences 35% of the defense, the overall team average covers 65%
     avg_receive = (best_receive * 0.35) + (sum(receives) * 0.65 / len(receives))
 
     server_roll = serve_power * random.uniform(0.85, 1.15)
     receiver_roll = avg_receive * random.uniform(0.85, 1.15)
 
-    if server_roll >= receiver_roll * 1.22:
-        return {
-            "outcome": "ace",
-            "server": server_name,
-            "message": f"Service Ace by **{server_name}**!"
-        }
-    elif server_roll < serve_power * 0.88:
+    # STREAMLINED ERROR LOGIC:
+    # 1. Normal servers (< 500): ~5% chance to fault on low rolls.
+    # 2. Elite/God-tier servers (500+): Rare ~1.5% chance to fault on unluckily low rolls.
+    is_error = False
+    if serve_power < 500:
+        if server_roll < (serve_power * 0.875):
+            is_error = True
+    else:
+        if server_roll < (serve_power * 0.865):
+            is_error = True
+
+    if is_error:
         return {
             "outcome": "error",
-            "server": server_name,
             "message": f"Service error by **{server_name}**!"
         }
+    elif server_roll >= receiver_roll * 1.22:
+        return {
+            "outcome": "ace",
+            "message": f"Service Ace by **{server_name}**!"
+        }
     else:
-        if receiver_roll >= server_roll * 1.18:
-            return {
-                "outcome": "perfect_receive",
-                "server": server_name,
-                "message": f"Powerful serve by **{server_name}**, but swallowed up by a perfect receive!"
-            }
-        elif server_roll >= receiver_roll * 1.08:
-            return {
-                "outcome": "bad_receive",
-                "server": server_name,
-                "message": f"Heavy serve by **{server_name}**! The defense scrambles to keep it alive."
-            }
-        else:
-            return {
-                "outcome": "normal_receive",
-                "server": server_name,
-                "message": f"Successful serve by **{server_name}**, cleanly received by opponent."
-            }
+        return {
+            "outcome": "in-play",
+            "incoming_power": server_roll,
+            "message": f"Serve by **{server_name}** is sent over and kept in play!"
+        }
 
 
 def run_match_simulation(user_stats: dict, opponent_stats: dict) -> dict:
@@ -107,9 +106,11 @@ def run_match_simulation(user_stats: dict, opponent_stats: dict) -> dict:
 
     while user_score < 5 and opponent_score < 5:
         if serving_team == "user":
-            result = serve_phase(user_stats, opponent_stats, user_rotation_step)
+            # Pass user's rotation and opponent's rotation
+            result = serve_phase(user_stats, opponent_stats, user_rotation_step, opp_rotation_step)
         else:
-            result = serve_phase(opponent_stats, user_stats, opp_rotation_step)
+            # Pass opponent's rotation and user's rotation
+            result = serve_phase(opponent_stats, user_stats, opp_rotation_step, user_rotation_step)
 
         match_log.append(result["message"])
 
