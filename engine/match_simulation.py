@@ -45,54 +45,59 @@ def get_current_rotation(team_stats: dict, rotation_step: int = 0) -> dict:
     }
 
 
-def serve_phase(serving_team_stats: dict, receiving_team_stats: dict, serving_rotation_step: int,
-                receiving_rotation_step: int) -> dict:
+def serve_phase(serving_team_stats: dict, serving_rotation_step: int) -> dict:
+    """
+    Simulates the serve phase independently of the receiving team.
+    Classifies serve performance as perfect, good, or poor, and generates
+    an incoming power score for the receive phase.
+    """
     serving_formation = get_current_rotation(serving_team_stats, serving_rotation_step)
     server_slot = serving_formation["server_slot"]
     server_card = serving_team_stats[server_slot]
     serve_power = server_card["serve"]
     server_name = server_card["name"]
 
-    # Use the receiving team's actual rotation step instead of hardcoding 0!
-    receiving_formation = get_current_rotation(receiving_team_stats, receiving_rotation_step)
-    back_row_receivers = receiving_formation["back_row"].values()
-    receives = [card["receive"] for card in back_row_receivers]
-    best_receive = max(receives)
+    # EXPLICIT ERROR CHECK: Steeper curve so elite players drop to ~2% errors
+    # Rookie (150) -> ~10% | Mid-game (450) -> ~5% | Endgame (800) -> ~2%
+    error_chance = max(0.015, 0.12 - (serve_power / 8000))
 
-    # Libero influences 35% of the defense, the overall team average covers 65%
-    avg_receive = (best_receive * 0.35) + (sum(receives) * 0.65 / len(receives))
-
-    server_roll = serve_power * random.uniform(0.85, 1.15)
-    receiver_roll = avg_receive * random.uniform(0.85, 1.15)
-
-    # STREAMLINED ERROR LOGIC:
-    # 1. Normal servers (< 500): ~5% chance to fault on low rolls.
-    # 2. Elite/God-tier servers (500+): Rare ~1.5% chance to fault on unluckily low rolls.
-    is_error = False
-    if serve_power < 500:
-        if server_roll < (serve_power * 0.875):
-            is_error = True
-    else:
-        if server_roll < (serve_power * 0.865):
-            is_error = True
-
-    if is_error:
+    if random.random() < error_chance:
         return {
             "outcome": "error",
-            "message": f"Service error by **{server_name}**!"
+            "message": f"Service error by **{server_name}**! Out of bounds."
         }
-    elif server_roll >= receiver_roll * 1.22:
-        return {
-            "outcome": "ace",
-            "message": f"Service Ace by **{server_name}**!"
-        }
+
+    # QUALITY ROLL: Slightly wider variance floor for elites so they can hit explosive Perfects,
+    # combined with a stronger tier bias to reward endgame progression.
+    variance_factor = max(0.06, 0.12 - (serve_power / 12000))
+    tier_bias = serve_power / 15000  # Stronger upward lean for elite cards
+    effective_mean = serve_power * (1.0 + tier_bias)
+
+    server_roll = random.gauss(effective_mean, serve_power * variance_factor)
+
+    # Standard quality thresholds relative to base stat
+    ratio = server_roll / max(serve_power, 1)
+
+    if ratio >= 1.08:
+        quality = "perfect"
+        incoming_power = server_roll * 1.20
+        message = f"A blistering, **perfect** serve by **{server_name}**! Laser-focused precision heading over the net!"
+    elif ratio >= 0.93:
+        quality = "good"
+        incoming_power = server_roll
+        message = f"A solid, **good** serve sent cleanly over the net by **{server_name}**."
     else:
-        return {
-            "outcome": "in-play",
-            "incoming_power": server_roll,
-            "server_name": server_name,
-            "message": f"Serve by **{server_name}** is sent over and kept in play!"
-        }
+        quality = "poor"
+        incoming_power = server_roll * 0.80
+        message = f"A hesitant or floaty **poor** serve by **{server_name}** drifting across."
+
+    return {
+        "outcome": "in-play",
+        "incoming_power": incoming_power,
+        "quality": quality,
+        "server_name": server_name,
+        "message": message
+    }
 
 
 def receive_phase(incoming_power: float, receiving_team_stats: dict, receiving_rotation_step: int,
@@ -114,7 +119,7 @@ def receive_phase(incoming_power: float, receiving_team_stats: dict, receiving_r
     receive_stat = primary_card["receive"]
     defender_name = primary_card["name"]
 
-    defender_roll = receive_stat * random.uniform(0.85, 1.15)
+    defender_roll = receive_stat * random.uniform(0.75, 1.25)
 
     # ERROR CHECK: Standard error threshold
     error_threshold = incoming_power * 0.45
@@ -213,24 +218,16 @@ def run_match_simulation(user_stats: dict, opponent_stats: dict) -> dict:
 
     # The match loop runs until one team reaches 5 points
     while user_score < 5 and opponent_score < 5:
-        # Execute the serve phase based on who currently holds the serve
+        # Execute the serve phase independently based on who currently holds the serve
         if serving_team == "user":
-            result = serve_phase(user_stats, opponent_stats, user_rotation_step, opp_rotation_step)
+            result = serve_phase(user_stats, user_rotation_step)
         else:
-            result = serve_phase(opponent_stats, user_stats, opp_rotation_step, user_rotation_step)
+            result = serve_phase(opponent_stats, opp_rotation_step)
 
         match_log.append(result["message"])
 
-        # Handle direct service aces (serving team scores immediately and keeps the serve)
-        if result["outcome"] == "ace":
-            if serving_team == "user":
-                user_score += 1
-            else:
-                opponent_score += 1
-            # An ace means no side-out change; the serving team continues serving
-
         # Handle direct service errors (serving team faults, opponent scores + side-out & rotates)
-        elif result["outcome"] == "error":
+        if result["outcome"] == "error":
             if serving_team == "user":
                 opponent_score += 1
                 serving_team = "opponent"
@@ -245,7 +242,7 @@ def run_match_simulation(user_stats: dict, opponent_stats: dict) -> dict:
         # Handle in-play serves that cross the net and must go through the receive phase
         elif result["outcome"] == "in-play":
             incoming_power = result["incoming_power"]
-            server_name = result.get("server_name")  # Retrieve the active server's name passed from serve_phase
+            server_name = result.get("server_name")
 
             # The non-serving team attempts to receive the incoming serve
             if serving_team == "user":
@@ -261,13 +258,13 @@ def run_match_simulation(user_stats: dict, opponent_stats: dict) -> dict:
 
             match_log.append(receive_result["message"])
 
-            # Check if the receive phase resulted in a shank/error (point to the serving team)
+            # Check if the receive phase resulted in a shank/ace (point to the serving team)
             if receive_result["outcome"] == "receive_error":
                 if serving_team == "user":
                     user_score += 1
                 else:
                     opponent_score += 1
-                # TODO: Add side-out and rotation logic here for receive errors if desired!
+                # Serving team keeps the serve on an ace/receive error (no side-out change)
             else:
                 # Successfully passed! Retrieve pass modifier for the upcoming setter / spike phase
                 pass_mod = receive_result["pass_modifier"]

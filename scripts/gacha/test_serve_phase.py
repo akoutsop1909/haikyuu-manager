@@ -5,41 +5,21 @@ from engine.match_simulation import serve_phase
 TOTAL_RUNS = 1000
 
 
-def test_extreme_mismatch_ace_rate():
-    print("Testing Extreme Mismatch: 1000-Power Server vs. 110-Receive Defense (Stat Floor)...")
-
-    god_server_team = create_dummy_team(serve_val=1000, receive_val=200)
-    terrible_receive_team = create_dummy_team(serve_val=100, receive_val=110)
-
-    ace_count = sum(
-        1 for _ in range(TOTAL_RUNS)
-        if serve_phase(god_server_team, terrible_receive_team, 0, 0)['outcome'] == 'ace'
-    )
-
-    ace_pct = (ace_count / TOTAL_RUNS) * 100
-    print(f" -> Extreme Mismatch Ace Rate: {ace_pct:.1f}%")
-
-    # Even against the lowest legal receive stat (110), a maxed server should still heavily dominate
-    assert 70 <= ace_pct <= 100, f"UNBALANCED: Extreme mismatch ace rate of {ace_pct}% is out of bounds!"
-    print(" -> [PASS] Extreme mismatch dominance behaves correctly.\n")
-
-
 def test_low_stat_high_risk_tier():
-    print("Testing Low-Stat High-Risk Tier (Serve Power 90 vs Normal Defense)...")
+    print("Testing Low-Stat High-Risk Tier (Serve Power 90)...")
 
     bad_server_team = create_dummy_team(serve_val=90, receive_val=200)
-    normal_receive_team = create_dummy_team(serve_val=100, receive_val=200)
 
     error_count = sum(
         1 for _ in range(TOTAL_RUNS)
-        if serve_phase(bad_server_team, normal_receive_team, 0, 0)['outcome'] == 'error'
+        if serve_phase(bad_server_team, 0)['outcome'] == 'error'
     )
 
     error_pct = (error_count / TOTAL_RUNS) * 100
     print(f" -> Stat Floor Error Rate: {error_pct:.1f}%")
 
-    # Verify it hits the expected ~8.3% math curve safely
-    assert 5 <= error_pct <= 12, f"UNBALANCED: Stat floor error rate of {error_pct}% is out of bounds!"
+    # Verify error rate falls within expected range
+    assert 1 <= error_pct <= 5, f"UNBALANCED: Stat floor error rate of {error_pct}% is out of bounds!"
     print(" -> [PASS] Absolute serve floor behaves correctly.\n")
 
 
@@ -50,19 +30,18 @@ def test_power_threshold_transition():
     sub_threshold_team = create_dummy_team(serve_val=499, receive_val=200)
     # Team right at the elite tier boundary (>= 500 rule)
     at_threshold_team = create_dummy_team(serve_val=500, receive_val=200)
-    receiver_team = create_dummy_team(serve_val=100, receive_val=200)
 
-    # Test sub-threshold error rate (~8.3% expected)
+    # Test sub-threshold error rate
     sub_errors = sum(
         1 for _ in range(TOTAL_RUNS)
-        if serve_phase(sub_threshold_team, receiver_team, 0, 0)['outcome'] == 'error'
+        if serve_phase(sub_threshold_team, 0)['outcome'] == 'error'
     )
     sub_error_pct = (sub_errors / TOTAL_RUNS) * 100
 
-    # Test elite threshold error rate (~5.0% expected)
+    # Test elite threshold error rate
     at_errors = sum(
         1 for _ in range(TOTAL_RUNS)
-        if serve_phase(at_threshold_team, receiver_team, 0, 0)['outcome'] == 'error'
+        if serve_phase(at_threshold_team, 0)['outcome'] == 'error'
     )
     at_error_pct = (at_errors / TOTAL_RUNS) * 100
 
@@ -70,38 +49,11 @@ def test_power_threshold_transition():
     print(f" -> 500 Power Error Rate: {at_error_pct:.1f}%")
 
     # Assert both remain in their correct logical brackets and 500 is safer
-    assert 5 <= sub_error_pct <= 12, f"UNBALANCED: 499 error rate of {sub_error_pct}% is out of bounds!"
-    assert 2 <= at_error_pct <= 8, f"UNBALANCED: 500 error rate of {at_error_pct}% is out of bounds!"
+    assert 1 <= sub_error_pct <= 5, f"UNBALANCED: 499 error rate of {sub_error_pct}% is out of bounds!"
+    assert 0.5 <= at_error_pct <= 3, f"UNBALANCED: 500 error rate of {at_error_pct}% is out of bounds!"
     assert at_error_pct < sub_error_pct, f"LOGIC ERROR: Elite 500 serve should be safer than 499!"
 
     print(" -> [PASS] 500-power threshold transition behaves correctly.\n")
-
-
-def test_receiver_defense_mitigation():
-    print("Testing Receiver Defense Impact (Poor Defense vs Elite Defense)...")
-
-    server_team = create_dummy_team(serve_val=600, receive_val=200)
-    poor_defense = create_dummy_team(serve_val=100, receive_val=110)   # Floor receive (110)
-    elite_defense = create_dummy_team(serve_val=100, receive_val=900) # Elite receive (900)
-
-    poor_aces = sum(
-        1 for _ in range(TOTAL_RUNS)
-        if serve_phase(server_team, poor_defense, 0, 0)['outcome'] == 'ace'
-    )
-    elite_aces = sum(
-        1 for _ in range(TOTAL_RUNS)
-        if serve_phase(server_team, elite_defense, 0, 0)['outcome'] == 'ace'
-    )
-
-    poor_ace_pct = (poor_aces / TOTAL_RUNS) * 100
-    elite_ace_pct = (elite_aces / TOTAL_RUNS) * 100
-
-    print(f" -> Ace Rate vs Poor Defense (110 Receive): {poor_ace_pct:.1f}%")
-    print(f" -> Ace Rate vs Elite Defense (900 Receive): {elite_ace_pct:.1f}%")
-
-    # Assert that elite defense significantly reduces aces compared to poor defense
-    assert elite_ace_pct < poor_ace_pct, f"LOGIC ERROR: Elite defense must allow fewer aces than poor defense!"
-    print(" -> [PASS] Receiver defense stat mitigation behaves correctly.\n")
 
 
 def test_rotation_server_shift():
@@ -110,15 +62,14 @@ def test_rotation_server_shift():
     # Create a team where the default server (Setter) is weak (90),
     # but another position in the rotation has a powerhouse serve (900).
     asymmetric_team = create_asymmetric_team(base_serve=90, carry_position="opposite", carry_serve=900)
-    opponent = create_dummy_team(serve_val=100, receive_val=200)
 
-    # Give the setter the specific name the assertion is looking for
+    # Give the setter a specific name to check via message output
     asymmetric_team["setter"]["name"] = "WeakSetter"
 
-    # Step 0: Setter is in Zone 1 (Server stats = 90 -> high error or weak serve)
-    # Step 3: Opposite (GodOpposite) rotates into Zone 1 (Server stats = 900 -> high ace rate)
-    step_0_result = serve_phase(asymmetric_team, opponent, serving_rotation_step=0, receiving_rotation_step=0)
-    step_3_result = serve_phase(asymmetric_team, opponent, serving_rotation_step=3, receiving_rotation_step=0)
+    # Step 0: Setter is in Zone 1
+    # Step 3: Opposite rotates into Zone 1
+    step_0_result = serve_phase(asymmetric_team, serving_rotation_step=0)
+    step_3_result = serve_phase(asymmetric_team, serving_rotation_step=3)
 
     print(f" -> Rotation Step 0 Server Message: {step_0_result['message']}")
     print(f" -> Rotation Step 3 Server Message: {step_3_result['message']}")
@@ -130,47 +81,94 @@ def test_rotation_server_shift():
     print(" -> [PASS] Rotation-driven server shift behaves correctly.\n")
 
 
-def run_distribution_test(test_name, stat_val, error_bounds, ace_bounds, in_play_bounds):
-    print(f"Testing {test_name} ({stat_val} vs {stat_val} Stats)...")
+def test_serve_quality_scaling():
+    print("Testing Serve Quality Power Scaling...")
+    base_stat = 500
+    team = create_dummy_team(serve_val=base_stat, receive_val=200)
 
-    team = create_dummy_team(serve_val=stat_val, receive_val=stat_val)
+    # Run a batch to catch different qualities
+    found_qualities = set()
+    for _ in range(200):
+        res = serve_phase(team, 0)
+        if res["outcome"] == "in-play":
+            q = res["quality"]
+            found_qualities.add(q)
+            # Verify that perfect gives more power than poor
+            if q == "perfect":
+                assert res["incoming_power"] > base_stat * 1.0, "Perfect serve should boost power!"
+            elif q == "poor":
+                assert res["incoming_power"] < base_stat * 1.0, "Poor serve should scale power down!"
 
-    outcomes = {"ace": 0, "error": 0, "in-play": 0}
+    print(f" -> [PASS] Successfully verified quality tiers generated: {list(found_qualities)}\n")
+
+
+def test_integration_serve_to_ace():
+    print("Testing Integration: Perfect Serve -> Weak Defense Ace Transition...")
+    from engine.match_simulation import receive_phase
+
+    server_team = create_dummy_team(serve_val=900, receive_val=200)
+    weak_defense_team = create_dummy_team(serve_val=100, receive_val=110)
+
+    ace_triggered = False
+    for _ in range(500):
+        serve_res = serve_phase(server_team, 0)
+        if serve_res["outcome"] == "in-play":
+            receive_res = receive_phase(
+                serve_res["incoming_power"],
+                weak_defense_team,
+                0,
+                source_type="serve",
+                source_name=serve_res["server_name"]
+            )
+            if receive_res["outcome"] == "receive_error":
+                ace_triggered = True
+                break
+
+    assert ace_triggered, "LOGIC ERROR: A max-tier serve against a floor defense should eventually trigger a service ace via receive error!"
+    print(" -> [PASS] Serve-to-receive ace integration works seamlessly.\n")
+
+def run_distribution_test(test_name, stat_val, error_bounds, in_play_bounds):
+    print(f"Testing {test_name} Distribution (Serve Stat: {stat_val})...")
+
+    team = create_dummy_team(serve_val=stat_val, receive_val=200)
+
+    outcomes = {"error": 0, "in-play": 0}
+    qualities = {"perfect": 0, "good": 0, "poor": 0}
 
     for _ in range(TOTAL_RUNS):
-        result = serve_phase(team, team, 0, 0)
+        result = serve_phase(team, 0)
         outcomes[result["outcome"]] += 1
+        if result["outcome"] == "in-play":
+            qualities[result["quality"]] += 1
 
-    ace_pct = (outcomes["ace"] / TOTAL_RUNS) * 100
     error_pct = (outcomes["error"] / TOTAL_RUNS) * 100
     in_play_pct = (outcomes["in-play"] / TOTAL_RUNS) * 100
 
-    print(f" -> Results: {ace_pct:.1f}% Aces | {error_pct:.1f}% Errors | {in_play_pct:.1f}% In-Play")
+    print(f" -> Results: {error_pct:.1f}% Errors | {in_play_pct:.1f}% In-Play")
+    print(f"    (Qualities -> Perfect: {qualities['perfect']/TOTAL_RUNS*100:.1f}%, Good: {qualities['good']/TOTAL_RUNS*100:.1f}%, Poor: {qualities['poor']/TOTAL_RUNS*100:.1f}%)")
 
     min_err, max_err = error_bounds
-    min_ace, max_ace = ace_bounds
     min_ip, max_ip = in_play_bounds
 
     assert min_err <= error_pct <= max_err, f"UNBALANCED: Error rate of {error_pct}% is out of bounds!"
-    assert min_ace <= ace_pct <= max_ace, f"UNBALANCED: Ace rate of {ace_pct}% is out of bounds!"
     assert min_ip <= in_play_pct <= max_ip, f"UNBALANCED: In-play rate of {in_play_pct}% is out of bounds!"
 
-    print(f" -> [PASS] {test_name} is healthy and balanced.\n")
+    print(f" -> [PASS] {test_name} distribution is healthy and balanced.\n")
 
 
 if __name__ == "__main__":
     print("=== STARTING SERVE PHASE TESTS ===")
 
-    # All tests registered cleanly in one list without repeating boilerplate code
     tests = [
-        ("Extreme Mismatch Ace Rate", test_extreme_mismatch_ace_rate),
         ("Stat Floor Baseline", test_low_stat_high_risk_tier),
         ("Power Threshold Transition", test_power_threshold_transition),
-        ("Receiver Defense Mitigation", test_receiver_defense_mitigation),
         ("Rotation Server Shift", test_rotation_server_shift),
-        ("Early-Game Distribution", lambda: run_distribution_test("Early-Game", 150, (1, 10), (2, 15), (75, 95))),
-        ("Mid-Game Distribution", lambda: run_distribution_test("Mid-Game", 450, (1, 10), (2, 15), (75, 95))),
-        ("Endgame Distribution", lambda: run_distribution_test("Endgame", 800, (0, 6), (2, 15), (80, 96))),
+        ("Serve Quality Scaling", test_serve_quality_scaling),
+        ("Serve-to-Receive Ace Integration", test_integration_serve_to_ace),
+        ("Early-Game Distribution", lambda: run_distribution_test("Early-Game", 150, (7, 13), (87, 93))),
+        ("Mid-Game Distribution", lambda: run_distribution_test("Mid-Game", 450, (3, 8), (92, 97))),
+        ("Endgame Distribution", lambda: run_distribution_test("Endgame", 800, (1, 4), (96, 99))),
+        ("God-Tier Distribution", lambda: run_distribution_test("God-Tier", 1000, (0.5, 3), (97, 99.5))),
     ]
 
     failed = False
