@@ -9,6 +9,23 @@ ROTATION_ORDER = [
     "wing_spiker_2",    # Zone 5 (Back-Left)
 ]
 
+POSITION_WEIGHTS = {
+    "libero": 2.5,
+    "setter": 0.4,
+    "wing_spiker": 1.2,
+    "opposite": 1.0,
+    "middle_blocker": 1.0,
+}
+
+
+def _get_receive_error_message(defender_name: str, source_type: str, source_name: str = None) -> str:
+    """Helper to keep reception failure messages uniform and DRY."""
+    if source_type == "serve":
+        return f"Service Ace by **{source_name}** (**{defender_name}** reception error)."
+    else:
+        return f"Reception error by **{defender_name}**! Point by **{source_name}**."
+
+
 def get_current_rotation(team_stats: dict, rotation_step: int = 0) -> dict:
     """Calculates the team's current court rotation, front/back rows, and active server."""
 
@@ -57,8 +74,8 @@ def serve_phase(serving_team_stats: dict, serving_rotation_step: int) -> dict:
     serve_power = server_card["serve"]
     server_name = server_card["name"]
 
-    # EXPLICIT ERROR CHECK: Steeper curve so elite players drop to ~2% errors
-    # Rookie (150) -> ~10% | Mid-game (450) -> ~5% | Endgame (800) -> ~2%
+    # EXPLICIT ERROR CHECK: Steeper curve so elite players drop to the 1.5% error floor
+    # Early-Game (200) -> ~9.5% | Mid-game (600) -> ~4.5% | Endgame (1200) -> ~1.5% (Floor)
     error_chance = max(0.015, 0.12 - (serve_power / 8000))
 
     if random.random() < error_chance:
@@ -81,22 +98,19 @@ def serve_phase(serving_team_stats: dict, serving_rotation_step: int) -> dict:
     if ratio >= 1.08:
         quality = "perfect"
         incoming_power = server_roll * 1.20
-        message = f"A blistering, **perfect** serve by **{server_name}**! Laser-focused precision heading over the net!"
     elif ratio >= 0.93:
         quality = "good"
         incoming_power = server_roll
-        message = f"A solid, **good** serve sent cleanly over the net by **{server_name}**."
     else:
         quality = "poor"
         incoming_power = server_roll * 0.80
-        message = f"A hesitant or floaty **poor** serve by **{server_name}** drifting across."
 
     return {
         "outcome": "in-play",
         "incoming_power": incoming_power,
         "quality": quality,
         "server_name": server_name,
-        "message": message
+        "message": f"A **{quality}** serve by **{server_name}**."
     }
 
 
@@ -104,99 +118,101 @@ def receive_phase(incoming_power: float, receiving_team_stats: dict, receiving_r
                   source_type: str, source_name: str = None) -> dict:
     """
     Generalized receive/dig phase for ANY incoming ball (serve, spike, or dump).
-    1. Selects a primary defender from the back row weighted by receive stat.
-    2. Checks for a receive/dig error based on defender performance.
-    3. Includes a tiny 'miracle scramble' window so underdogs always have a small chance of survival.
-    4. Classifies pass quality as Perfect, Good, or Poor, yielding a pass modifier.
+    1. Selects a primary defender using heavy flattening weights to keep Libero frequency balanced.
+    2. Checks for unforced mental errors.
+    3. Checks for power shanks and executes reliable backup dives.
+    4. Classifies pass quality.
     """
     formation = get_current_rotation(receiving_team_stats, receiving_rotation_step)
     back_row = formation["back_row"]
     back_row_players = list(back_row.items())
 
-    weights = [card["receive"] for _, card in back_row_players]
+    # 1. HEAVY FLATTENING WEIGHTS (Brings Libero down from ~79% to a balanced ~55-60%)
+    weights = [next(w for key, w in POSITION_WEIGHTS.items() if key in slot) for slot, _ in back_row_players]
     primary_slot, primary_card = random.choices(back_row_players, weights=weights, k=1)[0]
 
     receive_stat = primary_card["receive"]
     defender_name = primary_card["name"]
 
-    defender_roll = receive_stat * random.uniform(0.75, 1.25)
+    receive_tier_bias = receive_stat / 15000
+    effective_receive_mean = receive_stat * (1.0 + receive_tier_bias)
+    defender_roll = random.gauss(effective_receive_mean, receive_stat * 0.12) * random.uniform(0.80, 1.20)
 
-    # ERROR CHECK: Standard error threshold
-    error_threshold = incoming_power * 0.45
-    is_primary_error = defender_roll < error_threshold
+    # Unforced mental error check
+    unforced_error_chance = max(0.012, 0.035 - (receive_stat / 15000))
+    if random.random() < unforced_error_chance:
+        return {
+            "outcome": "error",
+            "message": _get_receive_error_message(defender_name, source_type, source_name)
+        }
 
-    # MIRACLE SCRAMBLE WINDOW: Even in an extreme mismatch, give the underdog
-    # a flat ~8% chance of a miraculous hustle save (classic Haikyuu underdog moment!)
-    if is_primary_error and incoming_power > (receive_stat * 1.5):
-        if random.random() < 0.08:  # 8% miracle survival chance
-            is_primary_error = False
+    error_threshold = incoming_power * 0.52
+    is_power_error = defender_roll < error_threshold
 
-    action_label = "Service" if source_type == "serve" else "Attack"
-    failure_result = "receive_error"
+    # Underdog miracle window
+    if is_power_error and incoming_power > (receive_stat * 1.5):
+        if random.random() < 0.08:
+            is_power_error = False
 
-    if is_primary_error:
-        # Determine if it's a catastrophic shank or a playable pop-up
+    if is_power_error:
         is_catastrophic = defender_roll < (error_threshold * 0.60)
 
         if is_catastrophic:
-            # Catastrophic: No backup can reach it
-            if source_type == "serve" and source_name:
-                msg = f"Heavy service completely overpowers **{defender_name}**! Blown away for a Service Ace by **{source_name}**!"
-            else:
-                scorer_str = f" by **{source_name}**" if source_name else ""
-                msg = f"**{action_label}** completely overpowers **{defender_name}**! Unplayable shank! Point{scorer_str}!"
-            return {"outcome": failure_result, "message": msg}
+            return {
+                "outcome": "error",
+                "message": _get_receive_error_message(defender_name, source_type, source_name)
+            }
 
-        # Close shank: Triggers emergency backup dive
+        # 2. RELIABLE BACKUP DIVE (Guarantees ~45% success rate and passes telemetry keys)
         other_players = [p for p in back_row_players if p[0] != primary_slot]
-        if other_players:
-            sec_weights = [c["receive"] for _, c in other_players]
-            sec_slot, sec_card = random.choices(other_players, weights=sec_weights, k=1)[0]
-            sec_stat = sec_card["receive"]
-            sec_name = sec_card["name"]
+        sec_weights = [next(w for key, w in POSITION_WEIGHTS.items() if key in slot) for slot, _ in other_players]
+        sec_slot, sec_card = random.choices(other_players, weights=sec_weights, k=1)[0]
+        sec_name = sec_card["name"]
 
-            sec_roll = sec_stat * random.uniform(0.80, 1.15)
-            sec_error_threshold = incoming_power * 0.40
+        backup_success_chance = 0.45
 
-            if sec_roll < sec_error_threshold:
-                if source_type == "serve" and source_name:
-                    msg = f"Service shanked by **{defender_name}**, and **{sec_name}** couldn't reach the emergency recovery in time! Service Ace by **{source_name}**!"
-                else:
-                    scorer_str = f" by **{source_name}**" if source_name else ""
-                    msg = f"**{action_label}** shanked by **{defender_name}**, and **{sec_name}** couldn't reach the emergency save! Point{scorer_str}!"
-                return {"outcome": failure_result, "message": msg}
-            else:
-                msg = f"**{defender_name}** shanks the **{source_type}**, but **{sec_name}** dives for a desperate save! **Poor Pass** scrambled up."
-                return {"outcome": "in_play", "quality": "poor", "pass_modifier": 0.75, "message": msg}
+        if random.random() < backup_success_chance:
+            return {
+                "outcome": "in-play",
+                "quality": "poor",
+                "pass_modifier": 0.75,
+                "message": f"Poor Pass: **{sec_name}** recovers after **{defender_name}** error.",
+                "backup_triggered": True,
+                "backup_success": True,
+                "receiver_slot": sec_slot
+            }
         else:
-            if source_type == "serve" and source_name:
-                msg = f"Service error/shank by **{defender_name}**! Service Ace by **{source_name}**!"
-            else:
-                scorer_str = f" by **{source_name}**" if source_name else ""
-                msg = f"**{action_label}** error/shank by **{defender_name}**! Point{scorer_str}!"
-            return {"outcome": failure_result, "message": msg}
+            return {
+                "outcome": "error",
+                "message": _get_receive_error_message(f"{defender_name}/{sec_name}", source_type, source_name),
+                "backup_triggered": True,
+                "backup_success": False
+            }
 
-    # NO ERROR: Classify pass quality based on performance ratio
-    ratio = defender_roll / max(incoming_power, 1)
+    # FIX: Scale incoming power effectiveness based on the defender's mastery
+    # High-receive stats (like 1200) naturally absorb and cushion heavy velocity better
+    mitigation_factor = min(1.0, 1000 / max(receive_stat, 200))
+    adjusted_incoming_power = incoming_power * mitigation_factor
+
+    # Pass quality classification using the balanced power
+    ratio = defender_roll / max(adjusted_incoming_power, 1)
 
     if ratio >= 1.15:
         quality = "perfect"
         pass_modifier = 1.25
-        message = f"A stellar reception of the **{source_type}** by **{defender_name}**! **Perfect Pass** right on target!"
     elif ratio >= 0.85:
         quality = "good"
         pass_modifier = 1.00
-        message = f"Stable control of the **{source_type}** by **{defender_name}**. Clean **Good Pass**."
     else:
         quality = "poor"
         pass_modifier = 0.80
-        message = f"Heavy **{source_type}** pushes **{defender_name}** back. A **Poor Pass**, limiting options."
 
     return {
-        "outcome": "in_play",
+        "outcome": "in-play",
         "quality": quality,
         "pass_modifier": pass_modifier,
-        "message": message
+        "receiver_slot": primary_slot,
+        "message": f"A **{quality}** pass by **{defender_name}**."
     }
 
 
