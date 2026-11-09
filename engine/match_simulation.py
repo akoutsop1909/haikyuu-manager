@@ -18,10 +18,12 @@ POSITION_WEIGHTS = {
 }
 
 
-def _get_receive_error_message(defender_name: str, source_type: str, source_name: str = None) -> str:
+def _get_receive_error_message(defender_name: str, source_type: str, source_name: str) -> str:
     """Helper to keep reception failure messages uniform and DRY."""
     if source_type == "serve":
         return f"Service Ace by **{source_name}** (**{defender_name}** reception error)."
+    elif source_type == "dump":
+        return f"Setter dump by **{source_name}** (**{defender_name}** reception error)."
     else:
         return f"Reception error by **{defender_name}**! Point by **{source_name}**."
 
@@ -115,7 +117,7 @@ def serve_phase(serving_team_stats: dict, serving_rotation_step: int) -> dict:
 
 
 def receive_phase(incoming_power: float, receiving_team_stats: dict, receiving_rotation_step: int,
-                  source_type: str, source_name: str = None) -> dict:
+                  source_type: str, source_name: str) -> dict:
     """
     Generalized receive/dig phase for ANY incoming ball (serve, spike, or dump).
     1. Selects a primary defender using heavy flattening weights to keep Libero frequency balanced.
@@ -127,19 +129,26 @@ def receive_phase(incoming_power: float, receiving_team_stats: dict, receiving_r
     back_row = formation["back_row"]
     back_row_players = list(back_row.items())
 
-    # 1. HEAVY FLATTENING WEIGHTS (Brings Libero down from ~79% to a balanced ~55-60%)
+    # 1. POSITION & STAT WEIGHTS (Gives Libero/high-stat cards a dominant ~70-73% share)
     weights = [next(w for key, w in POSITION_WEIGHTS.items() if key in slot) for slot, _ in back_row_players]
     primary_slot, primary_card = random.choices(back_row_players, weights=weights, k=1)[0]
 
     receive_stat = primary_card["receive"]
     defender_name = primary_card["name"]
 
+    # Calculate the defender's effective performance roll:
+    # 1. Tier bias gives a slight scaling edge to higher-level cards (e.g., ~10% bonus at stat 1500).
     receive_tier_bias = receive_stat / 15000
     effective_receive_mean = receive_stat * (1.0 + receive_tier_bias)
+
+    # 2. Roll with Gaussian distribution (12% stat deviation) multiplied by a uniform
+    # variance multiplier (80%-120%) to create natural, volatile match performance swings.
     defender_roll = random.gauss(effective_receive_mean, receive_stat * 0.12) * random.uniform(0.80, 1.20)
 
-    # Unforced mental error check
-    unforced_error_chance = max(0.012, 0.035 - (receive_stat / 15000))
+    # Unforced mental error check:
+    # Maintains a minimum baseline error chance (1.2%) even for elite cards
+    # to keep the game volatile, scaling slightly based on stat tiers.
+    unforced_error_chance = max(0.012, 0.035 - receive_tier_bias)
     if random.random() < unforced_error_chance:
         return {
             "outcome": "error",
@@ -177,21 +186,27 @@ def receive_phase(incoming_power: float, receiving_team_stats: dict, receiving_r
                 "quality": "poor",
                 "pass_modifier": 0.75,
                 "message": f"Poor Pass: **{sec_name}** recovers after **{defender_name}** error.",
-                "backup_triggered": True,
-                "backup_success": True,
-                "receiver_slot": sec_slot
+                "receiver_slot": sec_slot,
+                "telemetry": {
+                    "backup_triggered": True,
+                    "backup_success": True
+                }
             }
         else:
             return {
                 "outcome": "error",
                 "message": _get_receive_error_message(f"{defender_name}/{sec_name}", source_type, source_name),
-                "backup_triggered": True,
-                "backup_success": False
+                "telemetry": {
+                    "backup_triggered": True,
+                    "backup_success": False
+                }
             }
 
-    # FIX: Scale incoming power effectiveness based on the defender's mastery
-    # High-receive stats (like 1200) naturally absorb and cushion heavy velocity better
-    mitigation_factor = min(1.0, 1000 / max(receive_stat, 200))
+    # Fine-tuned stat-agnostic power absorption:
+    # Gentle scaling that keeps early/mid game smooth,
+    # but prevents endgame from hitting above 42% perfect passes.
+    mitigation_factor = max(0.85, 1.0 - (receive_stat / 8000.0))
+
     adjusted_incoming_power = incoming_power * mitigation_factor
 
     # Pass quality classification using the balanced power
@@ -213,6 +228,90 @@ def receive_phase(incoming_power: float, receiving_team_stats: dict, receiving_r
         "pass_modifier": pass_modifier,
         "receiver_slot": primary_slot,
         "message": f"A **{quality}** pass by **{defender_name}**."
+    }
+
+
+def set_phase(pass_quality: str, pass_modifier: float, receiver_slot: str, team_stats: dict, rotation_step: int) -> dict:
+    """Simulates the setting phase following a successful receive, with a chance for a setter dump on a perfect pass."""
+    designated_setter = team_stats.get("setter")
+
+    # --- SETTER SELECTION LOGIC ---
+    if receiver_slot != "setter":
+        # Normal play: the designated setter takes the second touch instantly
+        setter_card = designated_setter
+        set_stat = setter_card["set"]
+    else:
+        # Edge case: the setter received the ball and cannot set!
+        formation = get_current_rotation(team_stats, rotation_step)
+        active_players = {**formation["front_row"], **formation["back_row"]}
+
+        if "libero" in active_players:
+            setter_card = active_players["libero"]
+            set_stat = setter_card["set"]
+        else:
+            _, setter_card = max(
+                ((slot, card) for slot, card in active_players.items() if slot != "setter"),
+                key=lambda item: item[1]["set"]
+            )
+            # Give non-setters a baseline emergency setting capability (at least 50% of the main setter's stat)
+            set_stat = int(max(setter_card["set"], designated_setter["set"] * 0.5))
+
+    setter_name = setter_card["name"]
+
+    # --- SETTER DUMP CHECK (The Wildcard) ---
+    # Allowed only if the designated setter is setting (receiver_slot != "setter") and pass is perfect
+    if receiver_slot != "setter" and pass_quality == "perfect" and random.random() < 0.12:
+        dump_tier_bias = set_stat / 15000
+        effective_mean = set_stat * (1.0 + dump_tier_bias)
+
+        # Factor in the pass_modifier so a cleaner pass makes the dump sharper!
+        base_dump_roll = random.gauss(effective_mean, set_stat * 0.12) * random.uniform(0.85, 1.15)
+        dump_roll = base_dump_roll * pass_modifier
+        ratio = dump_roll / max(set_stat, 1)
+
+        if ratio >= 1.10:
+            quality = "perfect"
+            incoming_power = dump_roll * 1.25
+        elif ratio >= 0.85:
+            quality = "good"
+            incoming_power = dump_roll
+        else:
+            quality = "poor"
+            incoming_power = dump_roll * 0.75
+
+        return {
+            "outcome": "incoming_dump",
+            "source_type": "dump",
+            "source_name": setter_name,
+            "incoming_power": incoming_power,
+            "quality": quality,
+            "message": f"A **{quality}** setter dump by **{setter_name}**!"
+        }
+
+    # --- STANDARD SET PERFORMANCE ROLL ---
+    set_tier_bias = set_stat / 15000
+    effective_mean = set_stat * (1.0 + set_tier_bias)
+
+    base_roll = random.gauss(effective_mean, set_stat * 0.10) * random.uniform(0.85, 1.15)
+    set_roll = base_roll * pass_modifier
+
+    ratio = set_roll / max(set_stat, 1)
+
+    if ratio >= 1.10:
+        quality = "perfect"
+        attack_modifier = 1.30
+    elif ratio >= 0.85:
+        quality = "good"
+        attack_modifier = 1.00
+    else:
+        quality = "poor"
+        attack_modifier = 0.75
+
+    return {
+        "outcome": "in-play",
+        "quality": quality,
+        "attack_modifier": attack_modifier,
+        "message": f"A **{quality}** set by **{setter_name}**."
     }
 
 
