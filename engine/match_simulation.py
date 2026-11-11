@@ -117,54 +117,54 @@ def serve_phase(serving_team_stats: dict, serving_rotation_step: int) -> dict:
 
 
 def receive_phase(incoming_power: float, receiving_team_stats: dict, receiving_rotation_step: int,
-                  source_type: str, source_name: str) -> dict:
+                  source_type: str, source_name: str, net_cross_count: int = 1) -> dict:
     """
-    Generalized receive/dig phase for ANY incoming ball (serve, spike, or dump).
-    1. Selects a primary defender using heavy flattening weights to keep Libero frequency balanced.
-    2. Checks for unforced mental errors.
-    3. Checks for power shanks and executes reliable backup dives.
-    4. Classifies pass quality.
+    Generalized receive/dig phase with Rally Fatigue.
+    - net_cross_count tracks how many times the ball has crossed the net in this rally.
     """
     formation = get_current_rotation(receiving_team_stats, receiving_rotation_step)
     back_row = formation["back_row"]
     back_row_players = list(back_row.items())
 
-    # 1. POSITION & STAT WEIGHTS (Gives Libero/high-stat cards a dominant ~70-73% share)
+    # 1. POSITION & STAT WEIGHTS
     weights = [next(w for key, w in POSITION_WEIGHTS.items() if key in slot) for slot, _ in back_row_players]
     primary_slot, primary_card = random.choices(back_row_players, weights=weights, k=1)[0]
 
     receive_stat = primary_card["receive"]
     defender_name = primary_card["name"]
 
-    # Calculate the defender's effective performance roll:
-    # 1. Tier bias gives a slight scaling edge to higher-level cards (e.g., ~10% bonus at stat 1500).
     receive_tier_bias = receive_stat / 15000
     effective_receive_mean = receive_stat * (1.0 + receive_tier_bias)
 
-    # 2. Roll with Gaussian distribution (12% stat deviation) multiplied by a uniform
-    # variance multiplier (80%-120%) to create natural, volatile match performance swings.
     defender_roll = random.gauss(effective_receive_mean, receive_stat * 0.12) * random.uniform(0.80, 1.20)
 
-    # Unforced mental error check:
-    # Maintains a minimum baseline error chance (1.2%) even for elite cards
-    # to keep the game volatile, scaling slightly based on stat tiers.
-    unforced_error_chance = max(0.012, 0.035 - receive_tier_bias)
+    # --- RALLY FATIGUE CALCULATION ---
+    # First 2 crosses = Tier 0 (1.0x). Next 2 = Tier 1 (1.15x). Next 2 = Tier 2 (1.30x), etc.
+    fatigue_tier = max(0, (net_cross_count - 1) // 2)
+    fatigue_multiplier = 1.0 + (fatigue_tier * 0.40)
+
+    # Unforced mental error check (scales with fatigue)
+    unforced_error_chance = max(0.012, (0.035 - receive_tier_bias)) * fatigue_multiplier
     if random.random() < unforced_error_chance:
         return {
             "outcome": "error",
             "message": _get_receive_error_message(defender_name, source_type, source_name)
         }
 
-    error_threshold = incoming_power * 0.52
+    # Power error threshold (expanded by fatigue multiplier)
+    error_threshold = incoming_power * 0.52 * fatigue_multiplier
     is_power_error = defender_roll < error_threshold
 
-    # Underdog miracle window
+    # Underdog miracle window (slightly suppressed in deep fatigue)
     if is_power_error and incoming_power > (receive_stat * 1.5):
-        if random.random() < 0.08:
+        miracle_chance = max(0.02, 0.08 - (fatigue_tier * 0.02))
+        if random.random() < miracle_chance:
             is_power_error = False
 
     if is_power_error:
-        is_catastrophic = defender_roll < (error_threshold * 0.60)
+        # Catastrophic error threshold also scales with fatigue
+        catastrophic_threshold = error_threshold * (0.60 + (fatigue_tier * 0.05))
+        is_catastrophic = defender_roll < catastrophic_threshold
 
         if is_catastrophic:
             return {
@@ -172,24 +172,25 @@ def receive_phase(incoming_power: float, receiving_team_stats: dict, receiving_r
                 "message": _get_receive_error_message(defender_name, source_type, source_name)
             }
 
-        # 2. RELIABLE BACKUP DIVE (Guarantees ~45% success rate and passes telemetry keys)
+        # Reliable backup dive (success chance decreases as fatigue sets in)
         other_players = [p for p in back_row_players if p[0] != primary_slot]
         sec_weights = [next(w for key, w in POSITION_WEIGHTS.items() if key in slot) for slot, _ in other_players]
         sec_slot, sec_card = random.choices(other_players, weights=sec_weights, k=1)[0]
         sec_name = sec_card["name"]
 
-        backup_success_chance = 0.45
+        backup_success_chance = max(0.20, 0.45 - (fatigue_tier * 0.08))
 
         if random.random() < backup_success_chance:
             return {
                 "outcome": "in-play",
                 "quality": "poor",
-                "pass_modifier": 0.75,
-                "message": f"Poor Pass: **{sec_name}** recovers after **{defender_name}** error.",
+                "pass_modifier": max(0.50, 0.75 - (fatigue_tier * 0.05)),
+                "message": f"Poor Pass: **{sec_name}** recovers after **{defender_name}** error (Rally Fatigue Tier {fatigue_tier}).",
                 "receiver_slot": sec_slot,
                 "telemetry": {
                     "backup_triggered": True,
-                    "backup_success": True
+                    "backup_success": True,
+                    "fatigue_tier": fatigue_tier
                 }
             }
         else:
@@ -198,24 +199,23 @@ def receive_phase(incoming_power: float, receiving_team_stats: dict, receiving_r
                 "message": _get_receive_error_message(f"{defender_name}/{sec_name}", source_type, source_name),
                 "telemetry": {
                     "backup_triggered": True,
-                    "backup_success": False
+                    "backup_success": False,
+                    "fatigue_tier": fatigue_tier
                 }
             }
 
-    # Fine-tuned stat-agnostic power absorption:
-    # Gentle scaling that keeps early/mid game smooth,
-    # but prevents endgame from hitting above 42% perfect passes.
     mitigation_factor = max(0.85, 1.0 - (receive_stat / 8000.0))
-
     adjusted_incoming_power = incoming_power * mitigation_factor
 
-    # Pass quality classification using the balanced power
     ratio = defender_roll / max(adjusted_incoming_power, 1)
 
-    if ratio >= 1.15:
+    # Fatigue slightly penalizes pass quality in later tiers
+    adjusted_ratio = ratio / fatigue_multiplier
+
+    if adjusted_ratio >= 1.15:
         quality = "perfect"
         pass_modifier = 1.25
-    elif ratio >= 0.85:
+    elif adjusted_ratio >= 0.85:
         quality = "good"
         pass_modifier = 1.00
     else:
@@ -374,7 +374,7 @@ def run_match_simulation(user_stats: dict, opponent_stats: dict) -> dict:
             match_log.append(receive_result["message"])
 
             # Check if the receive phase resulted in a shank/ace (point to the serving team)
-            if receive_result["outcome"] == "receive_error":
+            if receive_result["outcome"] == "error":
                 if serving_team == "user":
                     user_score += 1
                 else:

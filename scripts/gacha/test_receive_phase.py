@@ -153,6 +153,46 @@ def test_backup_dive_scramble_telemetry():
     print(" -> [PASS] Emergency backup dive scramble telemetry recorded successfully.\n")
 
 
+def test_rally_fatigue_progression():
+    print("Testing Rally Fatigue Stepwise Progression (Cross 1 vs 3 vs 5)...")
+    team = create_dummy_team(receive_val=400)
+    incoming_power = 500
+
+    # Cross 1 (Tier 0: Fresh)
+    errors_1 = sum(
+        1 for _ in range(TOTAL_RUNS)
+        if receive_phase(incoming_power, team, 0, source_type="spike", source_name="Spiker", net_cross_count=1)[
+            'outcome'] == 'error'
+    )
+    pct_1 = (errors_1 / TOTAL_RUNS) * 100
+
+    # Cross 3 (Tier 1: First fatigue step)
+    errors_3 = sum(
+        1 for _ in range(TOTAL_RUNS)
+        if receive_phase(incoming_power, team, 0, source_type="spike", source_name="Spiker", net_cross_count=3)[
+            'outcome'] == 'error'
+    )
+    pct_3 = (errors_3 / TOTAL_RUNS) * 100
+
+    # Cross 5 (Tier 2: Deep fatigue)
+    errors_5 = sum(
+        1 for _ in range(TOTAL_RUNS)
+        if receive_phase(incoming_power, team, 0, source_type="spike", source_name="Spiker", net_cross_count=5)[
+            'outcome'] == 'error'
+    )
+    pct_5 = (errors_5 / TOTAL_RUNS) * 100
+
+    print(f" -> Error Rate at Net Cross 1 (Fresh): {pct_1:.1f}%")
+    print(f" -> Error Rate at Net Cross 3 (Tier 1): {pct_3:.1f}%")
+    print(f" -> Error Rate at Net Cross 5 (Tier 2): {pct_5:.1f}%")
+
+    # Assert strict stepwise escalation so error rates climb reliably
+    assert pct_3 > pct_1, f"UNBALANCED: Cross 3 error rate ({pct_3}%) did not increase from Cross 1 ({pct_1}%)!"
+    assert pct_5 > pct_3, f"UNBALANCED: Cross 5 error rate ({pct_5}%) did not increase from Cross 3 ({pct_3}%)!"
+
+    print(" -> [PASS] Rally fatigue stepwise progression and error scaling verified successfully.\n")
+
+
 def run_receive_distribution_test(test_name, stat_val, error_bounds, perfect_bounds, good_bounds, poor_bounds):
     print(f"Testing {test_name} Distribution (Receive Stat: {stat_val})...")
 
@@ -211,6 +251,7 @@ if __name__ == "__main__":
         ("Setter Reception Shielding", test_setter_reception_shielding),
         ("Vulnerable Rotation Step 2", test_vulnerable_rotation_step_2),
         ("Backup Dive Scramble Telemetry", test_backup_dive_scramble_telemetry),
+        ("Rally Fatigue Progression", test_rally_fatigue_progression),
         ("Early-Game Receive Distribution", lambda: run_receive_distribution_test("Early-Game", 200, (0.5, 5.0), (10, 45), (35, 75), (10, 40))),
         ("Mid-Game Receive Distribution", lambda: run_receive_distribution_test("Mid-Game", 600, (0.5, 5.0), (10, 45), (40, 75), (10, 40))),
         ("Endgame Receive Distribution", lambda: run_receive_distribution_test("Endgame", 1200, (0.5, 5.0), (10, 45), (40, 75), (10, 40))),
