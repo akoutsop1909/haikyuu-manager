@@ -9,12 +9,22 @@ ROTATION_ORDER = [
     "wing_spiker_2",    # Zone 5 (Back-Left)
 ]
 
-POSITION_WEIGHTS = {
+RECEIVE_WEIGHTS = {
     "libero": 2.5,
     "setter": 0.4,
     "wing_spiker": 1.2,
     "opposite": 1.0,
     "middle_blocker": 1.0,
+}
+
+SPIKE_WEIGHTS = {
+    ("wing_spiker", False): 1.5,
+    ("opposite", False): 1.5,
+    ("middle_blocker", False): 1.0,
+
+    ("wing_spiker", True): 0.8,  # Back-row pipe attack!
+    ("opposite", True): 0.8,
+    ("middle_blocker", True): 0.3,
 }
 
 
@@ -76,9 +86,10 @@ def serve_phase(serving_team_stats: dict, serving_rotation_step: int) -> dict:
     serve_power = server_card["serve"]
     server_name = server_card["name"]
 
-    # EXPLICIT ERROR CHECK: Steeper curve so elite players drop to the 1.5% error floor
-    # Early-Game (200) -> ~9.5% | Mid-game (600) -> ~4.5% | Endgame (1200) -> ~1.5% (Floor)
-    error_chance = max(0.015, 0.12 - (serve_power / 8000))
+    # --- BALANCED SERVE ERROR CHECK ---
+    # Raised the error floor slightly (0.045) so elite players maintaining high-risk
+    # jump serves still face a realistic ~4.5% error rate instead of being infallible.
+    error_chance = max(0.045, 0.14 - (serve_power / 7000))
 
     if random.random() < error_chance:
         return {
@@ -86,10 +97,11 @@ def serve_phase(serving_team_stats: dict, serving_rotation_step: int) -> dict:
             "message": f"Service error by **{server_name}**! Out of bounds."
         }
 
-    # QUALITY ROLL: Slightly wider variance floor for elites so they can hit explosive Perfects,
-    # combined with a stronger tier bias to reward endgame progression.
-    variance_factor = max(0.06, 0.12 - (serve_power / 12000))
-    tier_bias = serve_power / 15000  # Stronger upward lean for elite cards
+    # --- QUALITY ROLL: High-Risk, High-Reward Offensive Scaling ---
+    # Slightly softer tier bias (18000) so endgame perfects land around ~38-40%
+    # instead of blowing past 50%.
+    variance_factor = max(0.08, 0.14 - (serve_power / 10000))
+    tier_bias = serve_power / 18000
     effective_mean = serve_power * (1.0 + tier_bias)
 
     server_roll = random.gauss(effective_mean, serve_power * variance_factor)
@@ -127,7 +139,7 @@ def receive_phase(incoming_power: float, receiving_team_stats: dict, receiving_r
     back_row_players = list(back_row.items())
 
     # 1. POSITION & STAT WEIGHTS
-    weights = [next(w for key, w in POSITION_WEIGHTS.items() if key in slot) for slot, _ in back_row_players]
+    weights = [next(w for key, w in RECEIVE_WEIGHTS.items() if key in slot) for slot, _ in back_row_players]
     primary_slot, primary_card = random.choices(back_row_players, weights=weights, k=1)[0]
 
     receive_stat = primary_card["receive"]
@@ -174,7 +186,7 @@ def receive_phase(incoming_power: float, receiving_team_stats: dict, receiving_r
 
         # Reliable backup dive (success chance decreases as fatigue sets in)
         other_players = [p for p in back_row_players if p[0] != primary_slot]
-        sec_weights = [next(w for key, w in POSITION_WEIGHTS.items() if key in slot) for slot, _ in other_players]
+        sec_weights = [next(w for key, w in RECEIVE_WEIGHTS.items() if key in slot) for slot, _ in other_players]
         sec_slot, sec_card = random.choices(other_players, weights=sec_weights, k=1)[0]
         sec_name = sec_card["name"]
 
@@ -259,25 +271,26 @@ def set_phase(pass_quality: str, pass_modifier: float, receiver_slot: str, team_
     setter_name = setter_card["name"]
 
     # --- SETTER DUMP CHECK (The Wildcard) ---
-    # Allowed only if the designated setter is setting (receiver_slot != "setter") and pass is perfect
     if receiver_slot != "setter" and pass_quality == "perfect" and random.random() < 0.12:
         dump_tier_bias = set_stat / 15000
         effective_mean = set_stat * (1.0 + dump_tier_bias)
 
-        # Factor in the pass_modifier so a cleaner pass makes the dump sharper!
-        base_dump_roll = random.gauss(effective_mean, set_stat * 0.12) * random.uniform(0.85, 1.15)
-        dump_roll = base_dump_roll * pass_modifier
-        ratio = dump_roll / max(set_stat, 1)
+        # Roll normally without inflating the raw pool with a flat multiplier
+        base_dump_roll = random.gauss(effective_mean, set_stat * 0.12) * random.uniform(0.80, 1.20)
+
+        # Calculate ratio based on the roll, then factor the pass modifier into the effectiveness
+        raw_ratio = base_dump_roll / max(set_stat, 1)
+        ratio = raw_ratio * (pass_modifier / 1.25)  # Scales properly so low rolls can hit "poor"
 
         if ratio >= 1.10:
             quality = "perfect"
-            incoming_power = dump_roll * 1.25
+            incoming_power = base_dump_roll * 1.25
         elif ratio >= 0.85:
             quality = "good"
-            incoming_power = dump_roll
+            incoming_power = base_dump_roll
         else:
-            quality = "poor"
-            incoming_power = dump_roll * 0.75
+            quality = "poor"  # This will now actually trigger on lower rolls!
+            incoming_power = base_dump_roll * 0.75
 
         return {
             "outcome": "incoming_dump",
@@ -288,11 +301,16 @@ def set_phase(pass_quality: str, pass_modifier: float, receiver_slot: str, team_
             "message": f"A **{quality}** setter dump by **{setter_name}**!"
         }
 
-    # --- STANDARD SET PERFORMANCE ROLL ---
-    set_tier_bias = set_stat / 15000
-    effective_mean = set_stat * (1.0 + set_tier_bias)
+    # --- STANDARD SET PERFORMANCE ROLL (Balanced Tail Protection) ---
+    # 1. Slightly softer mean shift (divisor 30000) to keep the endgame
+    #    perfect rate locked right around ~36-37%.
+    effective_mean = set_stat * (1.0 + (set_stat / 30000))
 
-    base_roll = random.gauss(effective_mean, set_stat * 0.10) * random.uniform(0.85, 1.15)
+    # 2. Adjusted variance floor (0.12) so the endgame poor rate rises
+    #    back up to ~14% (matching receive) instead of collapsing to 9.9%.
+    relative_variance = max(0.12, 0.20 - (set_stat / 10000))
+
+    base_roll = random.gauss(effective_mean, set_stat * relative_variance) * random.uniform(0.80, 1.20)
     set_roll = base_roll * pass_modifier
 
     ratio = set_roll / max(set_stat, 1)

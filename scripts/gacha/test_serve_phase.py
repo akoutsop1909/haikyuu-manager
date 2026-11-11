@@ -172,9 +172,9 @@ if __name__ == "__main__":
         ("Libero Server Exemption", test_libero_server_exemption),
         ("Serve Quality Scaling", test_serve_math_multiplier_invariants),
         ("Serve-to-Receive Ace Integration", test_integration_serve_to_ace),
-        ("Early-Game Distribution", lambda: run_distribution_test("Early-Game", 200, (7.0, 12.0), (88.0, 93.0))),
-        ("Mid-Game Distribution", lambda: run_distribution_test("Mid-Game", 600, (2.5, 6.5), (93.5, 97.5))),
-        ("Endgame Distribution", lambda: run_distribution_test("Endgame", 1200, (0.5, 3.0), (97.0, 99.5))),
+        ("Early-Game Distribution", lambda: run_distribution_test("Early-Game", 200, (8.0, 15.0), (85.0, 92.0))),
+        ("Mid-Game Distribution", lambda: run_distribution_test("Mid-Game", 600, (4.0, 8.5), (91.5, 96.0))),
+        ("Endgame Distribution", lambda: run_distribution_test("Endgame", 1200, (3.5, 7.0), (93.0, 96.5))),
     ]
 
     failed = False
