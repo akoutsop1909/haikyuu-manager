@@ -33,9 +33,19 @@ def _get_receive_error_message(defender_name: str, source_type: str, source_name
     if source_type == "serve":
         return f"Service Ace by **{source_name}** (**{defender_name}** reception error)."
     elif source_type == "dump":
-        return f"Setter dump by **{source_name}** (**{defender_name}** reception error)."
+        return f"Setter dump kill by **{source_name}** (**{defender_name}** reception error)."
+    elif source_type == "spike":
+        return f"Spike kill by **{source_name}** (**{defender_name}** reception error)."
     else:
         return f"Reception error by **{defender_name}**! Point by **{source_name}**."
+
+
+def _get_player_role(slot_name: str) -> str:
+    """Helper to extract the base player role from a court slot string."""
+    for role in ["wing_spiker", "opposite", "middle_blocker"]:
+        if role in slot_name:
+            return role
+    return ""
 
 
 def get_current_rotation(team_stats: dict, rotation_step: int = 0) -> dict:
@@ -316,8 +326,63 @@ def set_phase(pass_quality: str, pass_modifier: float, receiver_slot: str, team_
     return {
         "outcome": "in-play",
         "quality": quality,
+        "setter_name": setter_name,
         "attack_modifier": attack_modifier,
         "message": f"A **{quality}** set by **{setter_name}**."
+    }
+
+
+def spike_phase(attack_modifier: float, setter_name: str, attacking_team_stats: dict, rotation_step: int) -> dict:
+    """
+    Simulates the spike phase following a successful set using a single unified
+    candidate collection loop for both front and back rows.
+    """
+    formation = get_current_rotation(attacking_team_stats, rotation_step)
+
+    # 1. Build candidates containing ((slot, card), weight) in a single pass
+    candidates = [
+        ((slot, card), SPIKE_WEIGHTS[(_get_player_role(slot), is_back_row)])
+        for row_type, is_back_row in [(formation["front_row"], False), (formation["back_row"], True)]
+        for slot, card in row_type.items()
+        if card["name"] != setter_name
+           and slot != "libero"
+           and "setter" not in slot
+           and (_get_player_role(slot), is_back_row) in SPIKE_WEIGHTS
+    ]
+
+    # 2. Unzip directly into population and weights for random.choices
+    spiker_choices, weights = zip(*candidates)
+    spiker_slot, spiker_card = random.choices(spiker_choices, weights=weights, k=1)[0]
+
+    spike_stat = spiker_card["spike"]
+    spiker_name = spiker_card["name"]
+
+    # --- CONTINUOUS STAT SCALING ---
+    effective_mean = spike_stat * (1.0 + (spike_stat / 30000))
+    relative_variance = max(0.12, 0.20 - (spike_stat / 10000))
+
+    base_spike_roll = random.gauss(effective_mean, spike_stat * relative_variance) * random.uniform(0.80, 1.20)
+    spike_roll = base_spike_roll * attack_modifier
+
+    # --- QUALITY EVALUATION RATIO ---
+    ratio = spike_roll / max(spike_stat, 1)
+
+    if ratio >= 1.10:
+        quality = "perfect"
+        incoming_power = spike_roll * 1.30
+    elif ratio >= 0.85:
+        quality = "good"
+        incoming_power = spike_roll
+    else:
+        quality = "poor"
+        incoming_power = spike_roll * 0.75
+
+    return {
+        "outcome": "in-play",
+        "incoming_power": incoming_power,
+        "quality": quality,
+        "spiker_name": spiker_name,
+        "message": f"A **{quality}** spike by **{spiker_name}**!"
     }
 
 
