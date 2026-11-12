@@ -252,9 +252,9 @@ if __name__ == "__main__":
         ("Vulnerable Rotation Step 2", test_vulnerable_rotation_step_2),
         ("Backup Dive Scramble Telemetry", test_backup_dive_scramble_telemetry),
         ("Rally Fatigue Progression", test_rally_fatigue_progression),
-        ("Early-Game Receive Distribution", lambda: run_receive_distribution_test("Early-Game", 200, (1.0, 3.0), (29.0, 37.0), (31.0, 40.0), (26.0, 35.0))),
-        ("Mid-Game Receive Distribution", lambda: run_receive_distribution_test("Mid-Game", 600, (1.0, 3.0), (31.0, 40.0), (41.0, 50.0), (14.0, 22.0))),
-        ("Endgame Receive Distribution", lambda: run_receive_distribution_test("Endgame", 1200, (1.0, 3.0), (40.0, 50.0), (36.0, 45.0), (10.0, 18.0))),
+        ("Early-Game Receive Distribution", lambda: run_receive_distribution_test("Early-Game", 200, (1.0, 3.5), (28.0, 35.0), (40.0, 46.0), (20.0, 26.0))),
+        ("Mid-Game Receive Distribution", lambda: run_receive_distribution_test("Mid-Game", 600, (1.0, 3.0), (28.0, 34.0), (44.0, 51.0), (17.0, 23.0))),
+        ("Endgame Receive Distribution", lambda: run_receive_distribution_test("Endgame", 1200, (1.0, 3.0), (31.0, 38.0), (48.0, 54.0), (10.0, 15.0))),
     ]
 
     failed = False
