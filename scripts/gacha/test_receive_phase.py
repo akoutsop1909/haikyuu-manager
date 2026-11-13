@@ -24,17 +24,17 @@ def test_extreme_mismatch_receive_error():
     incoming_power = 1000
     terrible_defense = create_dummy_team(serve_val=100, receive_val=110)
 
-    error_count = sum(
+    out_count = sum(
         1 for _ in range(TOTAL_RUNS)
         if receive_phase(incoming_power, terrible_defense, 0, source_type="serve", source_name="GodServer")[
-            'outcome'] == 'error'
+            'outcome'] == 'out'
     )
 
-    error_pct = (error_count / TOTAL_RUNS) * 100
-    print(f" -> Extreme Mismatch Error Rate: {error_pct:.1f}%")
+    out_pct = (out_count / TOTAL_RUNS) * 100
+    print(f" -> Extreme Mismatch Out Rate: {out_pct:.1f}%")
 
     # Expect dominant pressure (85% - 98%), accounting for the 8% underdog miracle window
-    assert 85 <= error_pct <= 98, f"UNBALANCED: Extreme mismatch error rate of {error_pct}% is out of bounds!"
+    assert 85 <= out_pct <= 98, f"UNBALANCED: Extreme mismatch out rate of {out_pct}% is out of bounds!"
     print(" -> [PASS] Extreme mismatch receive error rate behaves correctly.\n")
 
 
@@ -44,18 +44,18 @@ def test_elite_defense_stability():
     incoming_power = 400
     elite_defense = create_dummy_team(serve_val=100, receive_val=900)
 
-    error_count = sum(
+    out_count = sum(
         1 for _ in range(TOTAL_RUNS)
         if receive_phase(incoming_power, elite_defense, 0, source_type="serve", source_name="NormalServer")[
-            'outcome'] == 'error'
+            'outcome'] == 'out'
     )
 
-    error_pct = (error_count / TOTAL_RUNS) * 100
-    print(f" -> Elite Defense Error Rate: {error_pct:.1f}%")
+    out_pct = (out_count / TOTAL_RUNS) * 100
+    print(f" -> Elite Defense Out Rate: {out_pct:.1f}%")
 
-    # With the new realistic error floor, even elite defenses have a microscopic error chance (~1.2%),
+    # With the new realistic error floor, even elite defenses have a microscopic out chance (~1.2%),
     # but against a weak 400 power ball, it should remain very close to 0 (allow up to 2.5%).
-    assert error_pct <= 2.5, f"UNBALANCED: Elite defense error rate of {error_pct}% is too high!"
+    assert out_pct <= 2.5, f"UNBALANCED: Elite defense out rate of {out_pct}% is too high!"
     print(" -> [PASS] Elite defense stability behaves correctly.\n")
 
 
@@ -162,7 +162,7 @@ def test_rally_fatigue_progression():
     errors_1 = sum(
         1 for _ in range(TOTAL_RUNS)
         if receive_phase(incoming_power, team, 0, source_type="spike", source_name="Spiker", net_cross_count=1)[
-            'outcome'] == 'error'
+            'outcome'] == 'out'
     )
     pct_1 = (errors_1 / TOTAL_RUNS) * 100
 
@@ -170,7 +170,7 @@ def test_rally_fatigue_progression():
     errors_3 = sum(
         1 for _ in range(TOTAL_RUNS)
         if receive_phase(incoming_power, team, 0, source_type="spike", source_name="Spiker", net_cross_count=3)[
-            'outcome'] == 'error'
+            'outcome'] == 'out'
     )
     pct_3 = (errors_3 / TOTAL_RUNS) * 100
 
@@ -178,27 +178,27 @@ def test_rally_fatigue_progression():
     errors_5 = sum(
         1 for _ in range(TOTAL_RUNS)
         if receive_phase(incoming_power, team, 0, source_type="spike", source_name="Spiker", net_cross_count=5)[
-            'outcome'] == 'error'
+            'outcome'] == 'out'
     )
     pct_5 = (errors_5 / TOTAL_RUNS) * 100
 
-    print(f" -> Error Rate at Net Cross 1 (Fresh): {pct_1:.1f}%")
-    print(f" -> Error Rate at Net Cross 3 (Tier 1): {pct_3:.1f}%")
-    print(f" -> Error Rate at Net Cross 5 (Tier 2): {pct_5:.1f}%")
+    print(f" -> Out Rate at Net Cross 1 (Fresh): {pct_1:.1f}%")
+    print(f" -> Out Rate at Net Cross 3 (Tier 1): {pct_3:.1f}%")
+    print(f" -> Out Rate at Net Cross 5 (Tier 2): {pct_5:.1f}%")
 
     # Assert strict stepwise escalation so error rates climb reliably
-    assert pct_3 > pct_1, f"UNBALANCED: Cross 3 error rate ({pct_3}%) did not increase from Cross 1 ({pct_1}%)!"
-    assert pct_5 > pct_3, f"UNBALANCED: Cross 5 error rate ({pct_5}%) did not increase from Cross 3 ({pct_3}%)!"
+    assert pct_3 > pct_1, f"UNBALANCED: Cross 3 out rate ({pct_3}%) did not increase from Cross 1 ({pct_1}%)!"
+    assert pct_5 > pct_3, f"UNBALANCED: Cross 5 out rate ({pct_5}%) did not increase from Cross 3 ({pct_3}%)!"
 
-    print(" -> [PASS] Rally fatigue stepwise progression and error scaling verified successfully.\n")
+    print(" -> [PASS] Rally fatigue stepwise progression and out scaling verified successfully.\n")
 
 
-def run_receive_distribution_test(test_name, stat_val, error_bounds, perfect_bounds, good_bounds, poor_bounds):
+def run_receive_distribution_test(test_name, stat_val, out_bounds, perfect_bounds, good_bounds, poor_bounds):
     print(f"Testing {test_name} Distribution (Receive Stat: {stat_val})...")
 
     team = create_dummy_team(serve_val=stat_val, receive_val=stat_val)
 
-    outcomes = {"error": 0, "perfect": 0, "good": 0, "poor": 0}
+    outcomes = {"out": 0, "perfect": 0, "good": 0, "poor": 0}
     runs = 0
 
     for _ in range(TOTAL_RUNS):
@@ -209,8 +209,8 @@ def run_receive_distribution_test(test_name, stat_val, error_bounds, perfect_bou
 
             receive_res = receive_phase(incoming_power, team, 0, source_type="serve", source_name=server_name)
 
-            if receive_res["outcome"] == "error":
-                outcomes["error"] += 1
+            if receive_res["outcome"] == "out":
+                outcomes["out"] += 1
             else:
                 outcomes[receive_res["quality"]] += 1
             runs += 1
@@ -218,21 +218,21 @@ def run_receive_distribution_test(test_name, stat_val, error_bounds, perfect_bou
     if runs == 0:
         runs = 1
 
-    err_pct = (outcomes["error"] / runs) * 100
-    handled_pct = 100.0 - err_pct
+    out_pct = (outcomes["out"] / runs) * 100
+    handled_pct = 100.0 - out_pct
     perf_pct = (outcomes["perfect"] / runs) * 100
     good_pct = (outcomes["good"] / runs) * 100
     poor_pct = (outcomes["poor"] / runs) * 100
 
-    print(f" -> Results: {err_pct:.1f}% Errors | {handled_pct:.1f}% Handled")
+    print(f" -> Results: {out_pct:.1f}% Out | {handled_pct:.1f}% Handled")
     print(f"    (Qualities -> Perfect: {perf_pct:.1f}%, Good: {good_pct:.1f}%, Poor: {poor_pct:.1f}%)")
 
-    min_err, max_err = error_bounds
+    min_out, max_out = out_bounds
     min_perf, max_perf = perfect_bounds
     min_good, max_good = good_bounds
     min_poor, max_poor = poor_bounds
 
-    assert min_err <= err_pct <= max_err, f"UNBALANCED: Receive error rate of {err_pct}% is out of bounds!"
+    assert min_out <= out_pct <= max_out, f"UNBALANCED: Reception error rate of {out_pct}% is out of bounds!"
     assert min_perf <= perf_pct <= max_perf, f"UNBALANCED: Perfect pass rate of {perf_pct}% is out of bounds!"
     assert min_good <= good_pct <= max_good, f"UNBALANCED: Good pass rate of {good_pct}% is out of bounds!"
     assert min_poor <= poor_pct <= max_poor, f"UNBALANCED: Poor pass rate of {poor_pct}% is out of bounds!"

@@ -28,10 +28,10 @@ SPIKE_WEIGHTS = {
 }
 
 
-def _get_receive_error_message(defender_name: str, source_type: str, source_name: str) -> str:
-    """Helper to keep reception failure messages uniform and DRY."""
+def _get_receive_out_message(defender_name: str, source_type: str, source_name: str) -> str:
+    """Helper to keep reception/dig failure messages uniform and authentic."""
     if source_type == "serve":
-        return f"Service Ace by **{source_name}** (**{defender_name}** reception error)."
+        return f"Service ace by **{source_name}** (**{defender_name}** reception error)."
     elif source_type == "dump":
         return f"Setter dump kill by **{source_name}** (**{defender_name}** reception error)."
     elif source_type == "spike":
@@ -97,13 +97,13 @@ def serve_phase(serving_team_stats: dict, serving_rotation_step: int) -> dict:
     server_name = server_card["name"]
 
     # --- BALANCED SERVE ERROR CHECK ---
-    # Raised the error floor slightly (0.045) so elite players maintaining high-risk
-    # jump serves still face a realistic ~4.5% error rate instead of being infallible.
-    error_chance = max(0.045, 0.14 - (serve_power / 7000))
+    # Raised the out floor slightly (0.045) so elite players maintaining high-risk
+    # jump serves still face a realistic ~4.5% out rate instead of being infallible.
+    out_chance = max(0.045, 0.14 - (serve_power / 7000))
 
-    if random.random() < error_chance:
+    if random.random() < out_chance:
         return {
-            "outcome": "error",
+            "outcome": "out",
             "message": f"Service error by **{server_name}**! Out of bounds."
         }
 
@@ -159,12 +159,12 @@ def receive_phase(incoming_power: float, receiving_team_stats: dict, receiving_r
     fatigue_tier = max(0, (net_cross_count - 1) // 2)
     fatigue_multiplier = 1.0 + (fatigue_tier * 0.40)
 
-    # Unforced mental error check (tuned floor ensures endgame errors stay >= 1.4%)
-    unforced_error_chance = max(0.014, (0.028 - (receive_stat / 30000))) * fatigue_multiplier
-    if random.random() < unforced_error_chance:
+    # Unforced mental out check (tuned floor ensures endgame out stay >= 1.4%)
+    unforced_out_chance = max(0.014, (0.028 - (receive_stat / 30000))) * fatigue_multiplier
+    if random.random() < unforced_out_chance:
         return {
-            "outcome": "error",
-            "message": _get_receive_error_message(defender_name, source_type, source_name)
+            "outcome": "out",
+            "message": _get_receive_out_message(defender_name, source_type, source_name)
         }
 
     # Receive performance roll
@@ -172,24 +172,24 @@ def receive_phase(incoming_power: float, receiving_team_stats: dict, receiving_r
     relative_variance = max(0.12, 0.20 - (receive_stat / 10000))
     defender_roll = random.gauss(effective_mean, receive_stat * relative_variance) * random.uniform(0.80, 1.20)
 
-    # Power error threshold (scaled by fatigue)
-    error_threshold = incoming_power * 0.48 * fatigue_multiplier
-    is_power_error = defender_roll < error_threshold
+    # Power out threshold (scaled by fatigue)
+    out_threshold = incoming_power * 0.48 * fatigue_multiplier
+    is_power_out = defender_roll < out_threshold
 
     # Underdog miracle window
-    if is_power_error and incoming_power > (receive_stat * 1.5):
+    if is_power_out and incoming_power > (receive_stat * 1.5):
         miracle_chance = max(0.02, 0.08 - (fatigue_tier * 0.02))
         if random.random() < miracle_chance:
-            is_power_error = False
+            is_power_out = False
 
-    if is_power_error:
-        catastrophic_threshold = error_threshold * (0.60 + (fatigue_tier * 0.05))
+    if is_power_out:
+        catastrophic_threshold = out_threshold * (0.60 + (fatigue_tier * 0.05))
         is_catastrophic = defender_roll < catastrophic_threshold
 
         if is_catastrophic:
             return {
-                "outcome": "error",
-                "message": _get_receive_error_message(defender_name, source_type, source_name)
+                "outcome": "out",
+                "message": _get_receive_out_message(defender_name, source_type, source_name)
             }
 
         other_players = [p for p in back_row_players if p[0] != primary_slot]
@@ -204,7 +204,7 @@ def receive_phase(incoming_power: float, receiving_team_stats: dict, receiving_r
                 "outcome": "in-play",
                 "quality": "poor",
                 "pass_modifier": max(0.50, 0.75 - (fatigue_tier * 0.05)),
-                "message": f"Poor Pass: **{sec_name}** recovers after **{defender_name}** error (Rally Fatigue Tier {fatigue_tier}).",
+                "message": f"Poor Pass: **{sec_name}** recovers after **{defender_name}** error.",
                 "receiver_slot": sec_slot,
                 "telemetry": {
                     "backup_triggered": True,
@@ -213,8 +213,8 @@ def receive_phase(incoming_power: float, receiving_team_stats: dict, receiving_r
             }
         else:
             return {
-                "outcome": "error",
-                "message": _get_receive_error_message(f"{defender_name}/{sec_name}", source_type, source_name),
+                "outcome": "out",
+                "message": _get_receive_out_message(f"{defender_name}/{sec_name}", source_type, source_name),
                 "telemetry": {
                     "backup_triggered": True,
                     "backup_success": False
@@ -385,6 +385,78 @@ def spike_phase(attack_modifier: float, setter_name: str, attacking_team_stats: 
         "incoming_power": incoming_power,
         "spiker_name": spiker_name,
         "message": f"A **{quality}** spike by **{spiker_name}**!"
+    }
+
+
+def block_phase(incoming_power: float, defending_team_stats: dict, defending_rotation_step: int,
+                spiker_name: str) -> dict:
+    """
+    Simulates the block phase where all front-row players participate,
+    but the Middle Blocker heavily anchors and influences the block stat.
+    """
+    formation = get_current_rotation(defending_team_stats, defending_rotation_step)
+    front_row = formation["front_row"]
+    front_row_players = list(front_row.items())
+
+    # Isolate the Middle Blocker and the other two front-row players cleanly
+    mb_card = next(card for slot, card in front_row_players if "middle_blocker" in slot)
+    mb_stat = mb_card["block"]
+    blocker_name = mb_card["name"]
+    other_stats = [card["block"] for slot, card in front_row_players if "middle_blocker" not in slot]
+
+    # Calculate blended stat (MB = 70%, Others = 30%)
+    effective_block_stat = (mb_stat * 0.70) + ((sum(other_stats) / len(other_stats)) * 0.30)
+
+    # --- DYNAMIC BLOCK-OUT CHECK (Balanced Mismatch Scaling) ---
+    power_disparity = incoming_power / max(effective_block_stat, 1)
+
+    # Scale much more gently (e.g., multiplier 0.015 instead of 0.12)
+    dynamic_out_chance = max(0.015, 0.03 + (max(0.0, power_disparity - 1.0) * 0.018))
+
+    if random.random() < dynamic_out_chance:
+        return {
+            "outcome": "out",
+            "message": f"Block out! Point by **{spiker_name}**."
+        }
+
+    # Block Performance Roll
+    effective_mean = effective_block_stat * (1.0 + (effective_block_stat / 30000))
+    relative_variance = max(0.12, 0.20 - (effective_block_stat / 10000))
+    block_roll = random.gauss(effective_mean, effective_block_stat * relative_variance) * random.uniform(0.80, 1.20)
+
+    ratio = block_roll / max(effective_block_stat, 1)
+
+    # Quality Tiers & Stuff Block Check
+    if ratio >= 1.10:
+        quality = "perfect"
+
+        power_advantage = block_roll / max(incoming_power, 1)
+        stuff_chance = min(0.65, max(0.15, 0.25 * power_advantage))
+
+        if random.random() < stuff_chance:
+            return {
+                "outcome": "kill_block",
+                "quality": quality,
+                "message": f"**Kill block** by **{blocker_name}** and the front row!"
+            }
+
+        power_multiplier = 0.25
+
+    elif ratio >= 0.85:
+        quality = "good"
+        power_multiplier = 0.55
+    else:
+        quality = "poor"
+        power_multiplier = 0.85
+
+    mitigated_power = incoming_power * power_multiplier
+
+    return {
+        "outcome": "in-play",
+        "quality": quality,
+        "mitigated_power": mitigated_power,
+        "spiker_name": spiker_name,
+        "message": f"A **{quality}** block by **{blocker_name}**!"
     }
 
 
