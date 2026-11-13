@@ -326,8 +326,8 @@ def set_phase(pass_quality: str, pass_modifier: float, receiver_slot: str, team_
     return {
         "outcome": "in-play",
         "quality": quality,
-        "setter_name": setter_name,
         "attack_modifier": attack_modifier,
+        "setter_name": setter_name,
         "message": f"A **{quality}** set by **{setter_name}**."
     }
 
@@ -361,8 +361,10 @@ def spike_phase(attack_modifier: float, setter_name: str, attacking_team_stats: 
     effective_mean = spike_stat * (1.0 + (spike_stat / 30000))
     relative_variance = max(0.12, 0.20 - (spike_stat / 10000))
 
+    # Dampen the attack modifier so it doesn't entirely dictate the outcome
+    dampened_modifier = 1.0 + (attack_modifier - 1.0) * 0.5
     base_spike_roll = random.gauss(effective_mean, spike_stat * relative_variance) * random.uniform(0.80, 1.20)
-    spike_roll = base_spike_roll * attack_modifier
+    spike_roll = base_spike_roll * dampened_modifier
 
     # --- QUALITY EVALUATION RATIO ---
     ratio = spike_roll / max(spike_stat, 1)
@@ -379,8 +381,8 @@ def spike_phase(attack_modifier: float, setter_name: str, attacking_team_stats: 
 
     return {
         "outcome": "in-play",
-        "incoming_power": incoming_power,
         "quality": quality,
+        "incoming_power": incoming_power,
         "spiker_name": spiker_name,
         "message": f"A **{quality}** spike by **{spiker_name}**!"
     }
