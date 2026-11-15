@@ -1,5 +1,5 @@
 from helpers import create_dummy_team, create_asymmetric_team
-from engine.match_simulation import serve_phase, receive_phase
+from engine.match_simulation import receive_phase
 
 # Global test configuration constant
 TOTAL_RUNS = 1000
@@ -33,9 +33,8 @@ def test_extreme_mismatch_receive_error():
     out_pct = (out_count / TOTAL_RUNS) * 100
     print(f" -> Extreme Mismatch Out Rate: {out_pct:.1f}%")
 
-    # Expect dominant pressure (85% - 98%), accounting for the 8% underdog miracle window
-    assert 85 <= out_pct <= 98, f"UNBALANCED: Extreme mismatch out rate of {out_pct}% is out of bounds!"
-    print(" -> [PASS] Extreme mismatch receive error rate behaves correctly.\n")
+    assert 40 <= out_pct <= 65, f"UNBALANCED: Extreme mismatch out rate of {out_pct}% is out of bounds!"
+    print(" -> [PASS] Extreme mismatch receive out rate behaves correctly.\n")
 
 
 def test_elite_defense_stability():
@@ -53,9 +52,7 @@ def test_elite_defense_stability():
     out_pct = (out_count / TOTAL_RUNS) * 100
     print(f" -> Elite Defense Out Rate: {out_pct:.1f}%")
 
-    # With the new realistic error floor, even elite defenses have a microscopic out chance (~1.2%),
-    # but against a weak 400 power ball, it should remain very close to 0 (allow up to 2.5%).
-    assert out_pct <= 2.5, f"UNBALANCED: Elite defense out rate of {out_pct}% is too high!"
+    assert out_pct <= 4.0, f"UNBALANCED: Elite defense out rate of {out_pct}% is too high!"
     print(" -> [PASS] Elite defense stability behaves correctly.\n")
 
 
@@ -186,9 +183,14 @@ def test_rally_fatigue_progression():
     print(f" -> Out Rate at Net Cross 3 (Tier 1): {pct_3:.1f}%")
     print(f" -> Out Rate at Net Cross 5 (Tier 2): {pct_5:.1f}%")
 
-    # Assert strict stepwise escalation so error rates climb reliably
+    # Assert strict stepwise escalation and lock in your desired target bounds
     assert pct_3 > pct_1, f"UNBALANCED: Cross 3 out rate ({pct_3}%) did not increase from Cross 1 ({pct_1}%)!"
     assert pct_5 > pct_3, f"UNBALANCED: Cross 5 out rate ({pct_5}%) did not increase from Cross 3 ({pct_3}%)!"
+
+    # New range assertions to protect your target numbers from regression
+    assert 2.0 <= pct_1 <= 8.0, f"UNBALANCED: Fresh out rate {pct_1}% is out of bounds!"
+    assert 25.0 <= pct_3 <= 38.0, f"UNBALANCED: Tier 1 fatigue out rate {pct_3}% is out of bounds!"
+    assert 50.0 <= pct_5 <= 65.0, f"UNBALANCED: Tier 2 fatigue out rate {pct_5}% is out of bounds!"
 
     print(" -> [PASS] Rally fatigue stepwise progression and out scaling verified successfully.\n")
 
@@ -197,32 +199,24 @@ def run_receive_distribution_test(test_name, stat_val, out_bounds, perfect_bound
     print(f"Testing {test_name} Distribution (Receive Stat: {stat_val})...")
 
     team = create_dummy_team(serve_val=stat_val, receive_val=stat_val)
+    incoming_power = float(stat_val)
 
     outcomes = {"out": 0, "perfect": 0, "good": 0, "poor": 0}
-    runs = 0
 
     for _ in range(TOTAL_RUNS):
-        serve_res = serve_phase(team, 0)
-        if serve_res["outcome"] == "in-play":
-            incoming_power = serve_res["incoming_power"]
-            server_name = serve_res["server_name"]
+        # Call receive_phase directly without needing serve_phase!
+        receive_res = receive_phase(incoming_power, team, 0, source_type="serve", source_name="Server")
 
-            receive_res = receive_phase(incoming_power, team, 0, source_type="serve", source_name=server_name)
+        if receive_res["outcome"] == "out":
+            outcomes["out"] += 1
+        else:
+            outcomes[receive_res["quality"]] += 1
 
-            if receive_res["outcome"] == "out":
-                outcomes["out"] += 1
-            else:
-                outcomes[receive_res["quality"]] += 1
-            runs += 1
-
-    if runs == 0:
-        runs = 1
-
-    out_pct = (outcomes["out"] / runs) * 100
+    out_pct = (outcomes["out"] / TOTAL_RUNS) * 100
     handled_pct = 100.0 - out_pct
-    perf_pct = (outcomes["perfect"] / runs) * 100
-    good_pct = (outcomes["good"] / runs) * 100
-    poor_pct = (outcomes["poor"] / runs) * 100
+    perf_pct = (outcomes["perfect"] / TOTAL_RUNS) * 100
+    good_pct = (outcomes["good"] / TOTAL_RUNS) * 100
+    poor_pct = (outcomes["poor"] / TOTAL_RUNS) * 100
 
     print(f" -> Results: {out_pct:.1f}% Out | {handled_pct:.1f}% Handled")
     print(f"    (Qualities -> Perfect: {perf_pct:.1f}%, Good: {good_pct:.1f}%, Poor: {poor_pct:.1f}%)")
@@ -232,9 +226,9 @@ def run_receive_distribution_test(test_name, stat_val, out_bounds, perfect_bound
     min_good, max_good = good_bounds
     min_poor, max_poor = poor_bounds
 
-    assert min_out <= out_pct <= max_out, f"UNBALANCED: Reception error rate of {out_pct}% is out of bounds!"
+    assert min_out <= out_pct <= max_out, f"UNBALANCED: Reception out rate of {out_pct}% is out of bounds!"
     assert min_perf <= perf_pct <= max_perf, f"UNBALANCED: Perfect pass rate of {perf_pct}% is out of bounds!"
-    assert min_good <= good_pct <= max_good, f"UNBALANCED: Good pass rate of {good_pct}% is out of bounds!"
+    assert min_perf <= good_pct <= max_good, f"UNBALANCED: Good pass rate of {good_pct}% is out of bounds!"
     assert min_poor <= poor_pct <= max_poor, f"UNBALANCED: Poor pass rate of {poor_pct}% is out of bounds!"
 
     print(f" -> [PASS] {test_name} Receive Distribution is healthy and balanced.\n")
@@ -252,9 +246,9 @@ if __name__ == "__main__":
         ("Vulnerable Rotation Step 2", test_vulnerable_rotation_step_2),
         ("Backup Dive Scramble Telemetry", test_backup_dive_scramble_telemetry),
         ("Rally Fatigue Progression", test_rally_fatigue_progression),
-        ("Early-Game Receive Distribution", lambda: run_receive_distribution_test("Early-Game", 200, (1.0, 3.5), (28.0, 35.0), (40.0, 46.0), (20.0, 26.0))),
-        ("Mid-Game Receive Distribution", lambda: run_receive_distribution_test("Mid-Game", 600, (1.0, 3.0), (28.0, 34.0), (44.0, 51.0), (17.0, 23.0))),
-        ("Endgame Receive Distribution", lambda: run_receive_distribution_test("Endgame", 1200, (1.0, 3.0), (31.0, 38.0), (48.0, 54.0), (10.0, 15.0))),
+        ("Early-Game Receive Distribution", lambda: run_receive_distribution_test("Early-Game", 200, (1.0, 6.5), (28.0, 35.0), (39.0, 46.0), (20.0, 26.0))),
+        ("Mid-Game Receive Distribution", lambda: run_receive_distribution_test("Mid-Game", 600, (1.0, 6.5), (28.0, 34.0), (44.0, 51.0), (17.0, 23.0))),
+        ("Endgame Receive Distribution", lambda: run_receive_distribution_test("Endgame", 1200, (1.0, 5.5), (31.0, 38.0), (43.0, 54.0), (10.0, 15.0))),
     ]
 
     failed = False

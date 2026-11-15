@@ -62,7 +62,7 @@ def run_block_distribution_test(test_name, stat_val, out_bounds, kill_block_boun
     print(f"Testing {test_name} Block Distribution (Block Stat: {stat_val})...")
 
     team = create_dummy_team(block_val=stat_val)
-    incoming_power = 500
+    incoming_power = float(stat_val)
 
     outcomes = {"out": 0, "kill_block": 0, "perfect": 0, "good": 0, "poor": 0}
 

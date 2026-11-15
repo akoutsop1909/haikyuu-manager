@@ -28,6 +28,19 @@ SPIKE_WEIGHTS = {
 }
 
 
+def _calculate_receive_error_chance(receive_stat: float, incoming_power: float, fatigue_tier: int) -> float:
+    power_disparity = incoming_power / max(receive_stat, 1)
+    base_mismatch_error = 0.03 + (max(0.0, power_disparity - 1.0) * 0.065)
+    error_chance = max(0.02, base_mismatch_error) + (fatigue_tier * 0.30)
+
+    # --- UNDERDOG MERCY / MIRACLE BUFFER ---
+    # If facing overwhelming power, give low-stat defenders a tiny break
+    if incoming_power > (receive_stat * 1.5):
+        error_chance *= 0.90  # Reduces error chance by 10% for severe underdogs
+
+    return error_chance
+
+
 def _get_receive_out_message(defender_name: str, source_type: str, source_name: str) -> str:
     """Helper to keep reception/dig failure messages uniform and authentic."""
     if source_type == "serve":
@@ -167,24 +180,13 @@ def receive_phase(incoming_power: float, receiving_team_stats: dict, receiving_r
             "message": _get_receive_out_message(defender_name, source_type, source_name)
         }
 
-    # Receive performance roll
-    effective_mean = receive_stat * (1.0 + (receive_stat / 30000))
-    relative_variance = max(0.12, 0.20 - (receive_stat / 10000))
-    defender_roll = random.gauss(effective_mean, receive_stat * relative_variance) * random.uniform(0.80, 1.20)
+    # --- DYNAMIC RECEIVE ERROR CHECK ---
+    dynamic_error_chance = _calculate_receive_error_chance(receive_stat, incoming_power, fatigue_tier)
 
-    # Power out threshold (scaled by fatigue)
-    out_threshold = incoming_power * 0.48 * fatigue_multiplier
-    is_power_out = defender_roll < out_threshold
-
-    # Underdog miracle window
-    if is_power_out and incoming_power > (receive_stat * 1.5):
-        miracle_chance = max(0.02, 0.08 - (fatigue_tier * 0.02))
-        if random.random() < miracle_chance:
-            is_power_out = False
-
-    if is_power_out:
-        catastrophic_threshold = out_threshold * (0.60 + (fatigue_tier * 0.05))
-        is_catastrophic = defender_roll < catastrophic_threshold
+    if random.random() < dynamic_error_chance:
+        # When a receive error triggers, determine if it's an immediate catastrophic error
+        # or if a teammate gets a chance to trigger a backup dive!
+        is_catastrophic = random.random() < (0.50 + (fatigue_tier * 0.05))
 
         if is_catastrophic:
             return {
@@ -192,12 +194,17 @@ def receive_phase(incoming_power: float, receiving_team_stats: dict, receiving_r
                 "message": _get_receive_out_message(defender_name, source_type, source_name)
             }
 
+        # --- BACKUP DIVE MECHANIC ---
         other_players = [p for p in back_row_players if p[0] != primary_slot]
         sec_weights = [next(w for key, w in RECEIVE_WEIGHTS.items() if key in slot) for slot, _ in other_players]
         sec_slot, sec_card = random.choices(other_players, weights=sec_weights, k=1)[0]
+
+        sec_receive_stat = sec_card["receive"]
         sec_name = sec_card["name"]
 
-        backup_success_chance = max(0.20, 0.45 - (fatigue_tier * 0.08))
+        # Convert error chance into a success probability (lower error chance = higher success)
+        sec_error_chance = _calculate_receive_error_chance(sec_receive_stat, incoming_power, fatigue_tier)
+        backup_success_chance = max(0.15, min(0.85, 0.70 - sec_error_chance))
 
         if random.random() < backup_success_chance:
             return {
@@ -220,6 +227,11 @@ def receive_phase(incoming_power: float, receiving_team_stats: dict, receiving_r
                     "backup_success": False
                 }
             }
+
+    # --- STANDARD PERFORMANCE ROLL (For Perfect, Good, Poor passes) ---
+    effective_mean = receive_stat * (1.0 + (receive_stat / 30000))
+    relative_variance = max(0.12, 0.20 - (receive_stat / 10000))
+    defender_roll = random.gauss(effective_mean, receive_stat * relative_variance) * random.uniform(0.80, 1.20)
 
     ratio = (defender_roll / max(receive_stat, 1)) / fatigue_multiplier
 
@@ -293,9 +305,9 @@ def set_phase(pass_quality: str, pass_modifier: float, receiver_slot: str, team_
         return {
             "outcome": "incoming_dump",
             "source_type": "dump",
-            "source_name": setter_name,
-            "incoming_power": incoming_power,
             "quality": quality,
+            "incoming_power": incoming_power,
+            "source_name": setter_name,
             "message": f"A **{quality}** setter dump by **{setter_name}**!"
         }
 
@@ -437,7 +449,7 @@ def block_phase(incoming_power: float, defending_team_stats: dict, defending_rot
             return {
                 "outcome": "kill_block",
                 "quality": quality,
-                "message": f"**Kill block** by **{blocker_name}** and the front row!"
+                "message": f"Kill block by **{blocker_name}** and the front row!"
             }
 
         power_multiplier = 0.25
