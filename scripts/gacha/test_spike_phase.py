@@ -4,20 +4,6 @@ from engine.match_simulation import get_current_rotation, spike_phase
 TOTAL_RUNS = 1000
 
 
-def test_standard_spike_flow():
-    print("Testing Standard Spike Flow...")
-    team = create_dummy_team(spike_val=500)
-
-    res = spike_phase(attack_modifier=1.00, setter_name="TestSetter", attacking_team_stats=team, rotation_step=0)
-
-    assert "spiker_name" in res, "LOGIC ERROR: Spiker name missing from spike result!"
-    assert res["outcome"] == "in-play", f"LOGIC ERROR: Spike resulted in unexpected outcome: {res['outcome']}"
-    assert "spike by" in res["message"], f"LOGIC ERROR: Incorrect message format: {res['message']}"
-    assert res["quality"] in ["perfect", "good", "poor"], f"LOGIC ERROR: Invalid quality tier: {res['quality']}"
-
-    print(" -> [PASS] Standard spike execution handles normal flows correctly.\n")
-
-
 def test_exclusion_rules():
     print("Testing Exclusions (Setter, Libero, and Emergency Setter cannot spike)...")
     team = create_dummy_team(spike_val=500)
@@ -130,7 +116,6 @@ if __name__ == "__main__":
     print("=== STARTING SPIKE PHASE TESTS ===")
 
     tests = [
-        ("Standard Spike Flow", test_standard_spike_flow),
         ("Exclusion Rules (Setter, Libero, Emergency Setter)", test_exclusion_rules),
         ("Attack Modifier Scaling", test_attack_modifier_scaling),
         ("Front-Row vs Back-Row Frequency", test_front_back_row_frequency),

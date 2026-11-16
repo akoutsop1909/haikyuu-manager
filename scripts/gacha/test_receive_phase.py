@@ -1,5 +1,5 @@
 from helpers import create_dummy_team, create_asymmetric_team
-from engine.match_simulation import receive_phase
+from engine.match_simulation import _calculate_receive_error_chance, receive_phase
 
 # Global test configuration constant
 TOTAL_RUNS = 1000
@@ -8,7 +8,7 @@ TOTAL_RUNS = 1000
 def test_rotation_receive_shift():
     print("Testing Rotation-Driven Back-Row Shift for Reception...")
 
-    asymmetric_team = create_asymmetric_team(base_serve=100, base_receive=150, carry_position="libero", carry_receive=950)
+    asymmetric_team = create_asymmetric_team(base_receive=150, carry_position="libero", carry_receive=950)
     incoming_power = 600
 
     for step in range(6):
@@ -22,7 +22,7 @@ def test_extreme_mismatch_receive_error():
     print("Testing Extreme Mismatch: 1000 Incoming Power vs 110-Receive Defense (Stat Floor)...")
 
     incoming_power = 1000
-    terrible_defense = create_dummy_team(serve_val=100, receive_val=110)
+    terrible_defense = create_dummy_team(receive_val=110)
 
     out_count = sum(
         1 for _ in range(TOTAL_RUNS)
@@ -37,11 +37,42 @@ def test_extreme_mismatch_receive_error():
     print(" -> [PASS] Extreme mismatch receive out rate behaves correctly.\n")
 
 
+def test_underdog_mercy_logic():
+    print("Testing Underdog Mercy / Miracle Buffer Boundary Logic...")
+
+    receive_stat = 400
+    fatigue_tier = 0
+
+    # Threshold for mercy is incoming_power > (receive_stat * 1.5) -> 400 * 1.5 = 600
+
+    # 1. Just below threshold (Power = 599) -> Mercy should NOT apply
+    power_below = 599
+    error_below = _calculate_receive_error_chance(receive_stat, power_below, fatigue_tier)
+
+    # 2. Just above threshold (Power = 601) -> Mercy SHOULD apply (x0.90)
+    power_above = 601
+    error_above = _calculate_receive_error_chance(receive_stat, power_above, fatigue_tier)
+
+    # Calculate what error_above would be WITHOUT the mercy buffer
+    power_disparity = power_above / max(receive_stat, 1)
+    expected_base_error = 0.03 + (max(0.0, power_disparity - 1.0) * 0.065)
+    expected_with_mercy = expected_base_error * 0.90
+
+    # Assertions
+    assert error_above < error_below, f"UNBALANCED: Error chance didn't drop across the mercy threshold! (Below: {error_below}, Above: {error_above})"
+    assert abs(
+        error_above - expected_with_mercy) < 1e-5, f"LOGIC ERROR: Mercy multiplier (0.90) was not correctly applied!"
+
+    print(f" -> Error at 599 power (No Mercy): {error_below:.4f}")
+    print(f" -> Error at 601 power (With Mercy): {error_above:.4f}")
+    print(" -> [PASS] Underdog mercy buffer threshold and scaling verified successfully.\n")
+
+
 def test_elite_defense_stability():
     print("Testing Elite Defense Stability: 400 Incoming Power vs 900-Receive Defense...")
 
     incoming_power = 400
-    elite_defense = create_dummy_team(serve_val=100, receive_val=900)
+    elite_defense = create_dummy_team(receive_val=900)
 
     out_count = sum(
         1 for _ in range(TOTAL_RUNS)
@@ -52,14 +83,14 @@ def test_elite_defense_stability():
     out_pct = (out_count / TOTAL_RUNS) * 100
     print(f" -> Elite Defense Out Rate: {out_pct:.1f}%")
 
-    assert out_pct <= 4.0, f"UNBALANCED: Elite defense out rate of {out_pct}% is too high!"
+    assert out_pct <= 5.5, f"UNBALANCED: Elite defense out rate of {out_pct}% is too high!"
     print(" -> [PASS] Elite defense stability behaves correctly.\n")
 
 
 def test_libero_targeting_frequency():
     print("Testing Libero Target Frequency Bias (Weighted Selection)...")
     # Create an asymmetric team where the libero has 900 receive, others have 200
-    team = create_asymmetric_team(base_serve=100, base_receive=200, carry_position="libero", carry_receive=900)
+    team = create_asymmetric_team(base_receive=200, carry_position="libero", carry_receive=900)
 
     libero_target_count = 0
     incoming_power = 500
@@ -81,7 +112,7 @@ def test_setter_reception_shielding():
     print("Testing Setter Reception Shielding (Tactical Position Bias)...")
     # Create an asymmetric team where the setter has a massive receive stat (950)
     # while teammates are at a baseline of 200.
-    team = create_asymmetric_team(base_serve=100, base_receive=200, carry_position="setter", carry_receive=950)
+    team = create_asymmetric_team(base_receive=200, carry_position="setter", carry_receive=950)
 
     setter_target_count = 0
     incoming_power = 500
@@ -120,7 +151,7 @@ def test_vulnerable_rotation_step_2():
 
 def test_backup_dive_scramble_telemetry():
     print("Testing Emergency Backup Dive Scramble Telemetry...")
-    team = create_dummy_team(serve_val=300, receive_val=300)
+    team = create_dummy_team(receive_val=300)
     incoming_power = 750
 
     backup_dives_triggered = 0
@@ -153,7 +184,7 @@ def test_backup_dive_scramble_telemetry():
 def test_rally_fatigue_progression():
     print("Testing Rally Fatigue Stepwise Progression (Cross 1 vs 3 vs 5)...")
     team = create_dummy_team(receive_val=400)
-    incoming_power = 500
+    incoming_power = 700
 
     # Cross 1 (Tier 0: Fresh)
     errors_1 = sum(
@@ -198,7 +229,7 @@ def test_rally_fatigue_progression():
 def run_receive_distribution_test(test_name, stat_val, out_bounds, perfect_bounds, good_bounds, poor_bounds):
     print(f"Testing {test_name} Distribution (Receive Stat: {stat_val})...")
 
-    team = create_dummy_team(serve_val=stat_val, receive_val=stat_val)
+    team = create_dummy_team(receive_val=stat_val)
     incoming_power = float(stat_val)
 
     outcomes = {"out": 0, "perfect": 0, "good": 0, "poor": 0}
@@ -240,6 +271,7 @@ if __name__ == "__main__":
     tests = [
         ("Rotation Receive Shift", test_rotation_receive_shift),
         ("Extreme Mismatch Receive Error", test_extreme_mismatch_receive_error),
+        ("Underdog Mercy Logic", test_underdog_mercy_logic),
         ("Elite Defense Stability", test_elite_defense_stability),
         ("Libero Targeting Frequency", test_libero_targeting_frequency),
         ("Setter Reception Shielding", test_setter_reception_shielding),

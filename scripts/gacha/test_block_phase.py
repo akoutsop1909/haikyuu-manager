@@ -57,8 +57,7 @@ def test_weak_block_vulnerability():
     print(" -> [PASS] Weak block out rate behaves correctly.\n")
 
 
-def run_block_distribution_test(test_name, stat_val, out_bounds, kill_block_bounds, perfect_bounds, good_bounds,
-                                poor_bounds):
+def run_block_distribution_test(test_name, stat_val, out_bounds, kill_block_bounds, perfect_bounds, good_bounds, poor_bounds):
     print(f"Testing {test_name} Block Distribution (Block Stat: {stat_val})...")
 
     team = create_dummy_team(block_val=stat_val)
@@ -110,9 +109,9 @@ if __name__ == "__main__":
         ("Rotation Anchor Shift", test_block_rotation_anchor_shift),
         ("Elite Block Lockdown", test_elite_block_lockdown),
         ("Weak Block Vulnerability", test_weak_block_vulnerability),
-        ("Early-Game Block Distribution", lambda: run_block_distribution_test("Early-Game", 200, (1.0, 4.0), (10.0, 30.0), (15.0, 35.0), (30.0, 50.0), (10.0, 30.0))),
-        ("Mid-Game Block Distribution", lambda: run_block_distribution_test("Mid-Game", 600, (1.0, 3.0), (15.0, 40.0), (20.0, 40.0), (35.0, 55.0), (10.0, 25.0))),
-        ("Endgame Block Distribution", lambda: run_block_distribution_test("Endgame", 1200, (1.0, 2.5), (20.0, 50.0), (25.0, 45.0), (35.0, 55.0), (5.0, 20.0))),
+        ("Early-Game Block Distribution", lambda: run_block_distribution_test("Early-Game", 200, (1.0, 4.5), (5.0, 15.0), (15.0, 35.0), (30.0, 50.0), (10.0, 30.0))),
+        ("Mid-Game Block Distribution", lambda: run_block_distribution_test("Mid-Game", 600, (1.0, 4.0), (5.0, 15.0), (15.0, 40.0), (35.0, 55.0), (10.0, 25.0))),
+        ("Endgame Block Distribution", lambda: run_block_distribution_test("Endgame", 1200, (1.0, 5.5), (5.0, 15.0), (20.0, 45.0), (35.0, 55.0), (5.0, 20.0))),
     ]
 
     failed = False

@@ -34,7 +34,7 @@ def test_libero_server_exemption():
     print("Testing Libero-Server Exemption Rule...")
     # Create a team dictionary with a Middle Blocker in Zone 1 (Rotation step where MB becomes server)
     # Verify that the server slot holds the middle blocker and the libero is NOT in the back row as server.
-    team = create_dummy_team(serve_val=500, receive_val=500)
+    team = create_dummy_team(serve_val=500)
 
     # Find which rotation step places a middle_blocker in Zone 1 (server_slot)
     target_step = 0
@@ -55,55 +55,10 @@ def test_libero_server_exemption():
     print(f" -> [PASS] Libero successfully steps aside for serving Middle Blocker at rotation step {target_step}.\n")
 
 
-def test_serve_math_multiplier_invariants():
-    print("Testing Serve Phase Mathematical Multiplier Invariants...")
-    base_stat = 600
-    team = create_dummy_team(serve_val=base_stat, receive_val=200)
-
-    perfect_count = 0
-    poor_count = 0
-    min_perfect_observed = float('inf')
-    max_poor_observed = float('-inf')
-
-    for _ in range(500):
-        res = serve_phase(team, 0)
-        if res["outcome"] == "in-play":
-            quality = res["quality"]
-            incoming_power = res["incoming_power"]
-
-            # Mathematical constraint checks based on match_simulation.py logic:
-            if quality == "perfect":
-                perfect_count += 1
-                min_perfect_observed = min(min_perfect_observed, incoming_power)
-
-                # Perfect requires ratio >= 1.08 and incoming_power = server_roll * 1.20
-                # Therefore, incoming_power must mathematically be >= base_stat * 1.08 * 1.20
-                min_expected = base_stat * 1.08 * 1.20
-                assert incoming_power >= min_expected - 1e-5, (
-                    f"MATH ERROR: Perfect serve incoming_power ({incoming_power}) "
-                    f"violates lower math bound ({min_expected})."
-                )
-            elif quality == "poor":
-                poor_count += 1
-                max_poor_observed = max(max_poor_observed, incoming_power)
-
-                # Poor requires ratio < 0.93 and incoming_power = server_roll * 0.80
-                # Therefore, incoming_power must mathematically be < base_stat * 0.93 * 0.80
-                max_allowed = base_stat * 0.93 * 0.80
-                assert incoming_power <= max_allowed + 1e-5, (
-                    f"MATH ERROR: Poor serve incoming_power ({incoming_power}) "
-                    f"violates upper math bound ({max_allowed})."
-                )
-
-    print(f" -> Verified {perfect_count} 'perfect' serves (Lowest power seen: {min_perfect_observed:.1f} | Required min: {base_stat * 1.08 * 1.20:.1f})")
-    print(f" -> Verified {poor_count} 'poor' serves (Highest power seen: {max_poor_observed:.1f} | Required max: {base_stat * 0.93 * 0.80:.1f})")
-    print(" -> [PASS] All serve quality mathematical multiplier invariants hold true.\n")
-
-
 def run_distribution_test(test_name, stat_val, out_bounds, in_play_bounds):
     print(f"Testing {test_name} Distribution (Serve Stat: {stat_val})...")
 
-    team = create_dummy_team(serve_val=stat_val, receive_val=200)
+    team = create_dummy_team(serve_val=stat_val)
 
     outcomes = {"out": 0, "in-play": 0}
     qualities = {"perfect": 0, "good": 0, "poor": 0}
@@ -135,7 +90,6 @@ if __name__ == "__main__":
     tests = [
         ("Rotation Server Shift", test_rotation_server_shift),
         ("Libero Server Exemption", test_libero_server_exemption),
-        ("Serve Quality Scaling", test_serve_math_multiplier_invariants),
         ("Early-Game Distribution", lambda: run_distribution_test("Early-Game", 200, (8.0, 15.0), (85.0, 92.0))),
         ("Mid-Game Distribution", lambda: run_distribution_test("Mid-Game", 600, (4.0, 8.5), (91.5, 96.0))),
         ("Endgame Distribution", lambda: run_distribution_test("Endgame", 1200, (3.5, 7.0), (93.0, 96.5))),

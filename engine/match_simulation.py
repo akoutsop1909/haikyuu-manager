@@ -1,3 +1,6 @@
+# ==============================================================================
+# 1. CONSTANTS & GLOBAL WEIGHTS
+# ==============================================================================
 import random
 
 ROTATION_ORDER = [
@@ -27,7 +30,9 @@ SPIKE_WEIGHTS = {
     ("middle_blocker", True): 0.3,
 }
 
-
+# ==============================================================================
+# 2. HELPER FUNCTIONS
+# ==============================================================================
 def _calculate_receive_error_chance(receive_stat: float, incoming_power: float, fatigue_tier: int) -> float:
     power_disparity = incoming_power / max(receive_stat, 1)
     base_mismatch_error = 0.03 + (max(0.0, power_disparity - 1.0) * 0.065)
@@ -61,6 +66,9 @@ def _get_player_role(slot_name: str) -> str:
     return ""
 
 
+# ==============================================================================
+# 3. ROTATION MANAGEMENT & MATCH PHASES
+# ==============================================================================
 def get_current_rotation(team_stats: dict, rotation_step: int = 0) -> dict:
     """Calculates the team's current court rotation, front/back rows, and active server."""
 
@@ -472,6 +480,9 @@ def block_phase(incoming_power: float, defending_team_stats: dict, defending_rot
     }
 
 
+# ==============================================================================
+# 4. MATCH ORCHESTRATION / LOOP
+# ==============================================================================
 def run_match_simulation(user_stats: dict, opponent_stats: dict) -> dict:
     """
     Simulates a full match up to 5 points between the user and opponent.
@@ -543,7 +554,6 @@ def run_match_simulation(user_stats: dict, opponent_stats: dict) -> dict:
                 # TODO: Pass this pass_mod into your upcoming setter / spike phase function!
 
     return {
-        "winner": "user" if user_score > opponent_score else "opponent",
         "user_score": user_score,
         "opponent_score": opponent_score,
         "match_log": match_log
