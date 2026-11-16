@@ -54,7 +54,7 @@ CRITICAL OUTPUT RULE: Return ONLY the translated content. Do NOT include introdu
      • Recommended Potentials (潜在力厳選): Translate the set title AND the full bonus description below each set.
      • Recommended Memories (メモリー厳選): Translate the memory title AND the full effect description below each memory.
      • Skill Set (スキル構成): Translate every skill name and its complete description text.
-   - IMAGE SUB-HEADERS: When extracting unique skills, card details, or stats, use short, clean sub-headers in BOLD (e.g., **Memory Skill Effect:**, **Skill Details:**) rather than repeating the full character name or gacha title from the post body.
+   - IMAGE SUB-HEADERS & STATS: When extracting unique skills, card details, or memories, use short, clean sub-headers in BOLD (e.g., **Memory Skill Effect:**, **Skill Details:**). For nested or secondary sub-headers like stat breakdowns, use ITALICS (e.g., *Recommended Main Stats:*) to clearly show they belong to the section above them without creating a false top-level hierarchy.
    - BULLET LIST FORMATTING: Use bullet points (•) for itemized lists and skills extracted from images.
    - Do NOT bold skill description bodies, fine print, or footers inside images.
    - EXCLUDE generic graphic labels, casual speech bubbles, or directional text (e.g., 'It's right here!', 'Click here!', 'Check this out!') that provide no standalone information without looking at the image.
