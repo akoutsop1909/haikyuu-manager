@@ -38,13 +38,9 @@ def test_whale_vs_beginner_dominance():
 
     # 1. Create Fully Maxed Endgame Team (All 1200)
     whale_team = create_dummy_team(serve_val=1200, receive_val=1200, set_val=1200, spike_val=1200, block_val=1200)
-    for role, card in whale_team.items():
-        card["name"] = f"Whale {card['name']}"
 
     # 2. Create Beginner F2P Team (All 200)
     beginner_team = create_dummy_team(serve_val=200, receive_val=200, set_val=200, spike_val=200, block_val=200)
-    for role, card in beginner_team.items():
-        card["name"] = f"Beginner {card['name']}"
 
     # 3. Simulate multiple matches
     whale_wins = 0
