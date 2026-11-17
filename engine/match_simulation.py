@@ -52,10 +52,8 @@ def _get_receive_out_message(defender_name: str, source_type: str, source_name: 
         return f"Service ace by **{source_name}** (**{defender_name}** reception error)."
     elif source_type == "dump":
         return f"Setter dump kill by **{source_name}** (**{defender_name}** reception error)."
-    elif source_type == "spike":
-        return f"Spike kill by **{source_name}** (**{defender_name}** reception error)."
     else:
-        return f"Reception error by **{defender_name}**! Point by **{source_name}**."
+        return f"Spike kill by **{source_name}** (**{defender_name}** reception error)."
 
 
 def _get_player_role(slot_name: str) -> str:
@@ -483,75 +481,181 @@ def block_phase(incoming_power: float, defending_team_stats: dict, defending_rot
 # ==============================================================================
 # 4. MATCH ORCHESTRATION / LOOP
 # ==============================================================================
-def run_match_simulation(user_stats: dict, opponent_stats: dict) -> dict:
-    """
-    Simulates a full match up to 5 points between the user and opponent.
-    Tracks rotation steps, serving turns, scorekeeping, and handles the transition
-    from the serve phase into the receive phase.
-    """
+def simulate_single_rally(user_stats: dict, opponent_stats: dict, serving_team: str,
+                          user_rotation_step: int, opp_rotation_step: int,
+                          audit_dict: dict = None,
+                          debug: bool = False) -> dict:
+    match_log = []
+    net_cross_count = 1
+
+    # --- 1. SERVE PHASE ---
+    if serving_team == "user":
+        serve_res = serve_phase(user_stats, user_rotation_step)
+        attacking_team = "user"
+        defending_team = "opponent"
+        def_stats = opponent_stats
+        def_rot = opp_rotation_step
+    else:
+        serve_res = serve_phase(opponent_stats, opp_rotation_step)
+        attacking_team = "opponent"
+        defending_team = "user"
+        def_stats = user_stats
+        def_rot = user_rotation_step
+
+    if serve_res["outcome"] == "out":
+        match_log.append(serve_res["message"])
+        scoring_team = "opponent" if serving_team == "user" else "user"
+        return {"scoring_team": scoring_team, "match_log": match_log}
+
+    if debug:
+        match_log.append(serve_res["message"])
+
+    incoming_power = serve_res["incoming_power"]
+    source_type = "serve"
+    source_name = serve_res["server_name"]
+
+    # --- RALLY LOOP ---
+    while True:
+        # --- 2. RECEIVE PHASE ---
+        receive_res = receive_phase(incoming_power, def_stats, def_rot, source_type, source_name, net_cross_count)
+
+        if audit_dict is not None:
+            if receive_res["outcome"] == "out":
+                audit_dict["receive"]["out"] += 1
+            else:
+                audit_dict["receive"][receive_res["quality"]] += 1
+
+        if receive_res["outcome"] == "out":
+            match_log.append(receive_res["message"])
+            scoring_team = attacking_team
+            return {"scoring_team": scoring_team, "match_log": match_log}
+
+        if debug:
+            match_log.append(receive_res["message"])
+
+        pass_quality = receive_res["quality"]
+        pass_modifier = receive_res["pass_modifier"]
+        receiver_slot = receive_res["receiver_slot"]
+
+        attacking_team, defending_team = defending_team, attacking_team
+        atk_stats = user_stats if attacking_team == "user" else opponent_stats
+        atk_rot = user_rotation_step if attacking_team == "user" else opp_rotation_step
+        def_stats = user_stats if defending_team == "user" else opponent_stats
+        def_rot = user_rotation_step if defending_team == "user" else opp_rotation_step
+
+        # --- 3. SET PHASE ---
+        set_res = set_phase(pass_quality, pass_modifier, receiver_slot, atk_stats, atk_rot)
+
+        if audit_dict is not None:
+            if set_res["outcome"] == "incoming_dump":
+                audit_dict["set"]["incoming_dump"] += 1
+            else:
+                audit_dict["set"][set_res["quality"]] += 1
+
+        if set_res["outcome"] == "incoming_dump":
+            if debug:
+                match_log.append(set_res["message"])
+            net_cross_count += 1
+            incoming_power = set_res["incoming_power"]
+            source_type = set_res["source_type"]
+            source_name = set_res["source_name"]
+            continue
+
+        if debug:
+            match_log.append(set_res["message"])
+
+        # --- 4. SPIKE PHASE ---
+        spike_res = spike_phase(set_res["attack_modifier"], set_res["setter_name"], atk_stats, atk_rot)
+
+        if audit_dict is not None:
+            audit_dict["spike"][spike_res["quality"]] += 1
+
+        if debug:
+            match_log.append(spike_res["message"])
+
+        net_cross_count += 1
+        incoming_power = spike_res["incoming_power"]
+        source_type = "spike"
+        source_name = spike_res["spiker_name"]
+
+        # --- 5. BLOCK PHASE ---
+        block_res = block_phase(incoming_power, def_stats, def_rot, source_name)
+
+        if audit_dict is not None:
+            audit_dict["block_outcome"][block_res["outcome"]] += 1
+            if "quality" in block_res:
+                audit_dict["block_quality"][block_res["quality"]] += 1
+
+        if block_res["outcome"] == "out":
+            match_log.append(block_res["message"])
+            scoring_team = attacking_team
+            return {"scoring_team": scoring_team, "match_log": match_log}
+
+        elif block_res["outcome"] == "kill_block":
+            match_log.append(block_res["message"])
+            scoring_team = defending_team
+            return {"scoring_team": scoring_team, "match_log": match_log}
+
+        elif block_res["outcome"] == "in-play":
+            if debug:
+                match_log.append(block_res["message"])
+            incoming_power = block_res["mitigated_power"]
+            source_type = "block"
+            source_name = source_name
+            continue
+
+    return {"scoring_team": "user", "match_log": match_log}
+
+
+def run_match_simulation(user_stats: dict, opponent_stats: dict, debug: bool = False) -> dict:
     user_score = 0
     opponent_score = 0
-
-    # Track court rotation steps for both teams (0 through 5)
     user_rotation_step = 0
     opp_rotation_step = 0
-
-    serving_team = "user"  # User serves first to start the match
+    serving_team = "user"
     match_log = []
 
-    # The match loop runs until one team reaches 5 points
     while user_score < 5 and opponent_score < 5:
-        # Execute the serve phase independently based on who currently holds the serve
-        if serving_team == "user":
-            result = serve_phase(user_stats, user_rotation_step)
+        rally_res = simulate_single_rally(
+            user_stats, opponent_stats, serving_team,
+            user_rotation_step, opp_rotation_step,
+            debug=debug
+        )
+        scoring_team = rally_res["scoring_team"]
+
+        # Choose the emoji based on who scored this rally
+        emoji = "🔵" if scoring_team == "user" else "🔴"
+
+        # Apply the emoji to the final scoring line of the rally log
+        if rally_res["match_log"]:
+            # If debug=True, add standard bullets to intermediate lines, and the emoji to the scoring line
+            if debug:
+                for line in rally_res["match_log"][:-1]:
+                    match_log.append(f"> {line}")
+
+            # The last line of the rally log is always the scoring event!
+            scoring_line = rally_res["match_log"][-1]
+            match_log.append(f"{emoji} {scoring_line}")
+
+        if scoring_team == "user":
+            user_score += 1
         else:
-            result = serve_phase(opponent_stats, opp_rotation_step)
+            opponent_score += 1
 
-        match_log.append(result["message"])
-
-        # Handle direct service errors (serving team faults, opponent scores + side-out & rotates)
-        if result["outcome"] == "error":
-            if serving_team == "user":
-                opponent_score += 1
-                serving_team = "opponent"
-                opp_rotation_step = (opp_rotation_step + 1) % 6
-                match_log.append("Side-out! Opponent rotates.")
-            else:
-                user_score += 1
-                serving_team = "user"
+        if scoring_team != serving_team:
+            serving_team = scoring_team
+            if scoring_team == "user":
                 user_rotation_step = (user_rotation_step + 1) % 6
-                match_log.append("Side-out! User rotates.")
-
-        # Handle in-play serves that cross the net and must go through the receive phase
-        elif result["outcome"] == "in-play":
-            incoming_power = result["incoming_power"]
-            server_name = result.get("server_name")
-
-            # The non-serving team attempts to receive the incoming serve
-            if serving_team == "user":
-                receive_result = receive_phase(
-                    incoming_power, opponent_stats, opp_rotation_step,
-                    source_type="serve", source_name=server_name
-                )
+                # Lookup the new server's name after rotation
+                user_formation = get_current_rotation(user_stats, user_rotation_step)
+                new_server_name = user_stats[user_formation["server_slot"]]["name"]
+                match_log.append(f"🔄 Side-out! **{new_server_name}** rotates to the service line.")
             else:
-                receive_result = receive_phase(
-                    incoming_power, user_stats, user_rotation_step,
-                    source_type="serve", source_name=server_name
-                )
-
-            match_log.append(receive_result["message"])
-
-            # Check if the receive phase resulted in a shank/ace (point to the serving team)
-            if receive_result["outcome"] == "error":
-                if serving_team == "user":
-                    user_score += 1
-                else:
-                    opponent_score += 1
-                # Serving team keeps the serve on an ace/receive error (no side-out change)
-            else:
-                # Successfully passed! Retrieve pass modifier for the upcoming setter / spike phase
-                pass_mod = receive_result["pass_modifier"]
-                # TODO: Pass this pass_mod into your upcoming setter / spike phase function!
+                opp_rotation_step = (opp_rotation_step + 1) % 6
+                # Lookup the new server's name after rotation
+                opp_formation = get_current_rotation(opponent_stats, opp_rotation_step)
+                new_server_name = opponent_stats[opp_formation["server_slot"]]["name"]
+                match_log.append(f"🔄 Side-out! **{new_server_name}** rotates to the service line.")
 
     return {
         "user_score": user_score,
