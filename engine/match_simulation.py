@@ -18,6 +18,7 @@ RECEIVE_WEIGHTS = {
     "wing_spiker": 1.2,
     "opposite": 1.0,
     "middle_blocker": 1.0,
+    "pinch_server": 0.8,  # Lower weight since they are serving specialists
 }
 
 SPIKE_WEIGHTS = {
@@ -64,29 +65,47 @@ def _get_player_role(slot_name: str) -> str:
     return ""
 
 
+def _handle_side_out(team_stats: dict, rotation_step: int) -> tuple[int, str]:
+    """Helper to advance rotation and format the side-out log message."""
+    new_rotation_step = (rotation_step + 1) % 6
+
+    # Pass is_serving=True so it checks for the pinch server!
+    formation = get_current_rotation(team_stats, new_rotation_step, is_serving=True)
+    server_slot = formation["server_slot"]
+
+    # Pull the name from back_row in case the pinch server is active
+    server_card = formation["back_row"][server_slot]
+    server_name = server_card["name"]
+
+    message = f"🔄 Side-out! **{server_name}** rotates to the service line."
+    return new_rotation_step, message
+
 # ==============================================================================
 # 3. ROTATION MANAGEMENT & MATCH PHASES
 # ==============================================================================
-def get_current_rotation(team_stats: dict, rotation_step: int = 0) -> dict:
-    """Calculates the team's current court rotation, front/back rows, and active server."""
-
-    # Shift the rotation order based on the current rotation step
+def get_current_rotation(team_stats: dict, rotation_step: int, is_serving: bool = False) -> dict:
+    """Calculates court rotation, handles libero rules, and swaps in the pinch server if applicable."""
     offset = rotation_step % len(ROTATION_ORDER)
     current_lineup = ROTATION_ORDER[-offset:] + ROTATION_ORDER[:-offset]
 
-    # Front row is the first 3 players (Zones 4, 3, 2), Back row is the last 3 (Zones 1, 6, 5)
     front_slots = current_lineup[0:3]
     back_slots = current_lineup[3:6]
 
     front_row = {slot: team_stats[slot] for slot in front_slots}
     back_row = {slot: team_stats[slot] for slot in back_slots}
 
-    # Identify the designated server (Zone 1 / first back-row slot)
     server_slot = back_slots[0]
 
-    # Libero Substitution Rule:
-    # The Libero replaces a Middle Blocker in the back row,
-    # EXCEPT when that Middle Blocker is in Zone 1 (the server position).
+    # --- PINCH SERVER SUBSTITUTION LOGIC ---
+    # If this team is serving, and MB1 is the server, and a pinch server exists:
+    if is_serving and server_slot == "middle_blocker_1" and "pinch_server" in team_stats:
+        # Temporarily replace middle_blocker_1 with the pinch_server for this rally
+        back_row[server_slot] = team_stats["pinch_server"]
+        is_pinch_active = True
+    else:
+        is_pinch_active = False
+
+    # Libero Substitution Rule (unchanged)
     for slot in back_slots:
         if "middle_blocker" in slot:
             if slot == server_slot:
@@ -99,43 +118,31 @@ def get_current_rotation(team_stats: dict, rotation_step: int = 0) -> dict:
     return {
         "front_row": front_row,
         "back_row": back_row,
-        "server_slot": server_slot
+        "server_slot": server_slot,
+        "is_pinch_active": is_pinch_active
     }
 
 
 def serve_phase(serving_team_stats: dict, serving_rotation_step: int) -> dict:
-    """
-    Simulates the serve phase independently of the receiving team.
-    Classifies serve performance as perfect, good, or poor, and generates
-    an incoming power score for the receive phase.
-    """
-    serving_formation = get_current_rotation(serving_team_stats, serving_rotation_step)
+    serving_formation = get_current_rotation(serving_team_stats, serving_rotation_step, is_serving=True)
     server_slot = serving_formation["server_slot"]
-    server_card = serving_team_stats[server_slot]
+
+    # Pulls the active server card (automatically grabs pinch_server if active)
+    server_card = serving_formation["back_row"][server_slot]
     serve_power = server_card["serve"]
     server_name = server_card["name"]
 
-    # --- BALANCED SERVE ERROR CHECK ---
-    # Raised the out floor slightly (0.045) so elite players maintaining high-risk
-    # jump serves still face a realistic ~4.5% out rate instead of being infallible.
     out_chance = max(0.045, 0.14 - (serve_power / 7000))
-
     if random.random() < out_chance:
         return {
             "outcome": "out",
             "message": f"Service error by **{server_name}**! Out of bounds."
         }
 
-    # --- QUALITY ROLL: High-Risk, High-Reward Offensive Scaling ---
-    # Slightly softer tier bias (18000) so endgame perfects land around ~38-40%
-    # instead of blowing past 50%.
     variance_factor = max(0.08, 0.14 - (serve_power / 10000))
     tier_bias = serve_power / 18000
     effective_mean = serve_power * (1.0 + tier_bias)
-
     server_roll = random.gauss(effective_mean, serve_power * variance_factor)
-
-    # Standard quality thresholds relative to base stat
     ratio = server_roll / max(serve_power, 1)
 
     if ratio >= 1.08:
@@ -158,17 +165,23 @@ def serve_phase(serving_team_stats: dict, serving_rotation_step: int) -> dict:
 
 
 def receive_phase(incoming_power: float, receiving_team_stats: dict, receiving_rotation_step: int,
-                  source_type: str, source_name: str, net_cross_count: int = 1) -> dict:
-    """
-    Generalized receive/dig phase perfectly balanced to match set phase distribution
-    and satisfy all test suite assertion bounds.
-    """
-    formation = get_current_rotation(receiving_team_stats, receiving_rotation_step)
+                  source_type: str, source_name: str, net_cross_count: int = 1,
+                  is_serving: bool = False) -> dict:
+    formation = get_current_rotation(receiving_team_stats, receiving_rotation_step, is_serving=is_serving)
     back_row = formation["back_row"]
     back_row_players = list(back_row.items())
 
-    # Position & stat weights
-    weights = [next(w for key, w in RECEIVE_WEIGHTS.items() if key in slot) for slot, _ in back_row_players]
+    # --- UPDATED WEIGHT LOOKUP ---
+    weights = []
+    for slot, card in back_row_players:
+        # Check if this specific card is the pinch server
+        if "pinch_server" in receiving_team_stats and card == receiving_team_stats["pinch_server"]:
+            weights.append(RECEIVE_WEIGHTS["pinch_server"])
+        else:
+            # Fallback to standard slot-based role weights
+            weight = next((w for key, w in RECEIVE_WEIGHTS.items() if key in slot), 1.0)
+            weights.append(weight)
+
     primary_slot, primary_card = random.choices(back_row_players, weights=weights, k=1)[0]
 
     receive_stat = primary_card["receive"]
@@ -259,18 +272,19 @@ def receive_phase(incoming_power: float, receiving_team_stats: dict, receiving_r
         "message": f"A **{quality}** pass by **{defender_name}**."
     }
 
-def set_phase(pass_quality: str, pass_modifier: float, receiver_slot: str, team_stats: dict, rotation_step: int) -> dict:
-    """Simulates the setting phase following a successful receive, with a chance for a setter dump on a perfect pass."""
+def set_phase(pass_quality: str, pass_modifier: float, receiver_slot: str,
+              team_stats: dict, rotation_step: int, is_serving: bool = False) -> dict:
+    """Simulates the setting phase, supporting pinch servers during emergency setter lookups."""
     designated_setter = team_stats.get("setter")
 
     # --- SETTER SELECTION LOGIC ---
     if receiver_slot != "setter":
-        # Normal play: the designated setter takes the second touch instantly
         setter_card = designated_setter
         set_stat = setter_card["set"]
     else:
         # Edge case: the setter received the ball and cannot set!
-        formation = get_current_rotation(team_stats, rotation_step)
+        # Pass is_serving down here so the pinch server stays on the court!
+        formation = get_current_rotation(team_stats, rotation_step, is_serving=is_serving)
         active_players = {**formation["front_row"], **formation["back_row"]}
 
         if "libero" in active_players:
@@ -281,7 +295,6 @@ def set_phase(pass_quality: str, pass_modifier: float, receiver_slot: str, team_
                 ((slot, card) for slot, card in active_players.items() if slot != "setter"),
                 key=lambda item: item[1]["set"]
             )
-            # Give non-setters a baseline emergency setting capability (at least 50% of the main setter's stat)
             set_stat = int(max(setter_card["set"], designated_setter["set"] * 0.5))
 
     setter_name = setter_card["name"]
@@ -350,14 +363,13 @@ def set_phase(pass_quality: str, pass_modifier: float, receiver_slot: str, team_
     }
 
 
-def spike_phase(attack_modifier: float, setter_name: str, attacking_team_stats: dict, rotation_step: int) -> dict:
-    """
-    Simulates the spike phase following a successful set using a single unified
-    candidate collection loop for both front and back rows.
-    """
-    formation = get_current_rotation(attacking_team_stats, rotation_step)
+def spike_phase(attack_modifier: float, setter_name: str, attacking_team_stats: dict,
+                rotation_step: int, is_serving: bool = False) -> dict:
+    formation = get_current_rotation(attacking_team_stats, rotation_step, is_serving=is_serving)
 
-    # 1. Build candidates containing ((slot, card), weight) in a single pass
+    # Get the pinch server card if it exists
+    pinch_card = attacking_team_stats.get("pinch_server")
+
     candidates = [
         ((slot, card), SPIKE_WEIGHTS[(_get_player_role(slot), is_back_row)])
         for row_type, is_back_row in [(formation["front_row"], False), (formation["back_row"], True)]
@@ -365,10 +377,11 @@ def spike_phase(attack_modifier: float, setter_name: str, attacking_team_stats: 
         if card["name"] != setter_name
            and slot != "libero"
            and "setter" not in slot
+           and card != pinch_card  # <--- THIS LINE PREVENTS THE PINCH SERVER FROM SPIKING!
            and (_get_player_role(slot), is_back_row) in SPIKE_WEIGHTS
     ]
 
-    # 2. Unzip directly into population and weights for random.choices
+    # Unzip directly into population and weights for random.choices
     spiker_choices, weights = zip(*candidates)
     spiker_slot, spiker_card = random.choices(spiker_choices, weights=weights, k=1)[0]
 
@@ -516,8 +529,14 @@ def simulate_single_rally(user_stats: dict, opponent_stats: dict, serving_team: 
 
     # --- RALLY LOOP ---
     while True:
+        # Determine if the currently defending team is the original serving team
+        def_is_serving = (defending_team == serving_team)
+
         # --- 2. RECEIVE PHASE ---
-        receive_res = receive_phase(incoming_power, def_stats, def_rot, source_type, source_name, net_cross_count)
+        receive_res = receive_phase(
+            incoming_power, def_stats, def_rot, source_type, source_name,
+            net_cross_count, is_serving=def_is_serving
+        )
 
         if audit_dict is not None:
             if receive_res["outcome"] == "out":
@@ -537,14 +556,17 @@ def simulate_single_rally(user_stats: dict, opponent_stats: dict, serving_team: 
         pass_modifier = receive_res["pass_modifier"]
         receiver_slot = receive_res["receiver_slot"]
 
+        # Swap roles for transition offense
         attacking_team, defending_team = defending_team, attacking_team
         atk_stats = user_stats if attacking_team == "user" else opponent_stats
         atk_rot = user_rotation_step if attacking_team == "user" else opp_rotation_step
         def_stats = user_stats if defending_team == "user" else opponent_stats
         def_rot = user_rotation_step if defending_team == "user" else opp_rotation_step
 
+        atk_is_serving = (attacking_team == serving_team)
+
         # --- 3. SET PHASE ---
-        set_res = set_phase(pass_quality, pass_modifier, receiver_slot, atk_stats, atk_rot)
+        set_res = set_phase(pass_quality, pass_modifier, receiver_slot, atk_stats, atk_rot, is_serving=atk_is_serving)
 
         if audit_dict is not None:
             if set_res["outcome"] == "incoming_dump":
@@ -565,7 +587,7 @@ def simulate_single_rally(user_stats: dict, opponent_stats: dict, serving_team: 
             match_log.append(set_res["message"])
 
         # --- 4. SPIKE PHASE ---
-        spike_res = spike_phase(set_res["attack_modifier"], set_res["setter_name"], atk_stats, atk_rot)
+        spike_res = spike_phase(set_res["attack_modifier"], set_res["setter_name"], atk_stats, atk_rot, is_serving=atk_is_serving)
 
         if audit_dict is not None:
             audit_dict["spike"][spike_res["quality"]] += 1
@@ -600,8 +622,6 @@ def simulate_single_rally(user_stats: dict, opponent_stats: dict, serving_team: 
             if debug:
                 match_log.append(block_res["message"])
             incoming_power = block_res["mitigated_power"]
-            source_type = "block"
-            source_name = source_name
             continue
 
     return {"scoring_team": "user", "match_log": match_log}
@@ -645,17 +665,11 @@ def run_match_simulation(user_stats: dict, opponent_stats: dict, debug: bool = F
         if scoring_team != serving_team:
             serving_team = scoring_team
             if scoring_team == "user":
-                user_rotation_step = (user_rotation_step + 1) % 6
-                # Lookup the new server's name after rotation
-                user_formation = get_current_rotation(user_stats, user_rotation_step)
-                new_server_name = user_stats[user_formation["server_slot"]]["name"]
-                match_log.append(f"🔄 Side-out! **{new_server_name}** rotates to the service line.")
+                user_rotation_step, log_msg = _handle_side_out(user_stats, user_rotation_step)
+                match_log.append(log_msg)
             else:
-                opp_rotation_step = (opp_rotation_step + 1) % 6
-                # Lookup the new server's name after rotation
-                opp_formation = get_current_rotation(opponent_stats, opp_rotation_step)
-                new_server_name = opponent_stats[opp_formation["server_slot"]]["name"]
-                match_log.append(f"🔄 Side-out! **{new_server_name}** rotates to the service line.")
+                opp_rotation_step, log_msg = _handle_side_out(opponent_stats, opp_rotation_step)
+                match_log.append(log_msg)
 
     return {
         "user_score": user_score,
