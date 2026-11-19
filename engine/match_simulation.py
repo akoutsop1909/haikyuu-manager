@@ -34,7 +34,7 @@ SPIKE_WEIGHTS = {
 # ==============================================================================
 # 2. HELPER FUNCTIONS
 # ==============================================================================
-def _calculate_receive_error_chance(receive_stat: float, incoming_power: float, fatigue_tier: int) -> float:
+def calculate_receive_error_chance(receive_stat: float, incoming_power: float, fatigue_tier: int) -> float:
     power_disparity = incoming_power / max(receive_stat, 1)
     base_mismatch_error = 0.03 + (max(0.0, power_disparity - 1.0) * 0.065)
     error_chance = max(0.02, base_mismatch_error) + (fatigue_tier * 0.30)
@@ -200,7 +200,7 @@ def receive_phase(incoming_power: float, receiving_team_stats: dict, receiving_r
         }
 
     # --- DYNAMIC RECEIVE ERROR CHECK ---
-    dynamic_error_chance = _calculate_receive_error_chance(receive_stat, incoming_power, fatigue_tier)
+    dynamic_error_chance = calculate_receive_error_chance(receive_stat, incoming_power, fatigue_tier)
 
     if random.random() < dynamic_error_chance:
         # When a receive error triggers, determine if it's an immediate catastrophic error
@@ -215,14 +215,20 @@ def receive_phase(incoming_power: float, receiving_team_stats: dict, receiving_r
 
         # --- BACKUP DIVE MECHANIC ---
         other_players = [p for p in back_row_players if p[0] != primary_slot]
-        sec_weights = [next(w for key, w in RECEIVE_WEIGHTS.items() if key in slot) for slot, _ in other_players]
+        pinch_card = receiving_team_stats.get("pinch_server")
+        sec_weights = [
+            RECEIVE_WEIGHTS["pinch_server"]
+            if pinch_card is not None and card == pinch_card
+            else next((w for key, w in RECEIVE_WEIGHTS.items() if key in slot), 1.0)
+            for slot, card in other_players
+        ]
         sec_slot, sec_card = random.choices(other_players, weights=sec_weights, k=1)[0]
 
         sec_receive_stat = sec_card["receive"]
         sec_name = sec_card["name"]
 
         # Convert error chance into a success probability (lower error chance = higher success)
-        sec_error_chance = _calculate_receive_error_chance(sec_receive_stat, incoming_power, fatigue_tier)
+        sec_error_chance = calculate_receive_error_chance(sec_receive_stat, incoming_power, fatigue_tier)
         backup_success_chance = max(0.15, min(0.85, 0.70 - sec_error_chance))
 
         if random.random() < backup_success_chance:
@@ -295,7 +301,10 @@ def set_phase(pass_quality: str, pass_modifier: float, receiver_slot: str,
                 ((slot, card) for slot, card in active_players.items() if slot != "setter"),
                 key=lambda item: item[1]["set"]
             )
-            set_stat = int(max(setter_card["set"], designated_setter["set"] * 0.5))
+            if setter_card.get("position") == "S":
+                set_stat = setter_card["set"]
+            else:
+                set_stat = int(max(setter_card["set"], designated_setter["set"] * 0.5))
 
     setter_name = setter_card["name"]
 

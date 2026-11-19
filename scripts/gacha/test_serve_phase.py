@@ -1,5 +1,5 @@
-from helpers import create_dummy_team, create_asymmetric_team
-from engine.match_simulation import get_current_rotation, serve_phase, receive_phase
+from helpers import create_dummy_team, create_asymmetric_team, add_pinch_server
+from engine.match_simulation import get_current_rotation, serve_phase
 
 # Global test configuration constant
 TOTAL_RUNS = 1000
@@ -55,6 +55,28 @@ def test_libero_server_exemption():
     print(f" -> [PASS] Libero successfully steps aside for serving Middle Blocker at rotation step {target_step}.\n")
 
 
+def test_pinch_server_serves_for_mb1():
+    print("Testing Pinch Server Actually Serves for Middle Blocker 1...")
+    team = add_pinch_server(create_dummy_team(serve_val=50), serve_val=2000)
+    mb1_step = 2
+
+    serving_formation = get_current_rotation(team, mb1_step, is_serving=True)
+    assert serving_formation["is_pinch_active"] is True, (
+        f"LOGIC ERROR: Expected is_pinch_active=True at step {mb1_step}, got {serving_formation['is_pinch_active']}"
+    )
+    assert serving_formation["back_row"]["middle_blocker_1"] == team["pinch_server"], (
+        "LOGIC ERROR: Pinch server did not replace middle_blocker_1 in back_row when serving."
+    )
+
+    res = serve_phase(team, serving_rotation_step=mb1_step)
+    if res["outcome"] == "in-play":
+        assert res["incoming_power"] > 200, (
+            f"LOGIC ERROR: Expected higher incoming_power from 2000-serve pinch server, got {res['incoming_power']:.1f}"
+        )
+
+    print(f" -> [PASS] Pinch server replaces Middle Blocker 1 when serving at rotation step {mb1_step}.\n")
+
+
 def run_distribution_test(test_name, stat_val, out_bounds, in_play_bounds):
     print(f"Testing {test_name} Distribution (Serve Stat: {stat_val})...")
 
@@ -90,6 +112,7 @@ if __name__ == "__main__":
     tests = [
         ("Rotation Server Shift", test_rotation_server_shift),
         ("Libero Server Exemption", test_libero_server_exemption),
+        ("Pinch Server Serves for MB1", test_pinch_server_serves_for_mb1),
         ("Early-Game Distribution", lambda: run_distribution_test("Early-Game", 200, (8.0, 15.0), (85.0, 92.0))),
         ("Mid-Game Distribution", lambda: run_distribution_test("Mid-Game", 600, (4.0, 8.5), (91.5, 96.0))),
         ("Endgame Distribution", lambda: run_distribution_test("Endgame", 1200, (3.5, 7.0), (93.0, 96.5))),

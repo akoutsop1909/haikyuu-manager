@@ -4,14 +4,16 @@ from engine.data_loader import SPECIALTIES_BY_ID, BONDS_BY_ID, SYNERGIES_BY_ID, 
 MIN_SYNERGY_PLAYERS = TEAM_CONFIG["min_synergy_players"]
 
 
-def enrich_stats_with_names(stats_map: dict[str, dict], lineup_data: dict, cards: list[dict]) -> dict[str, dict]:
-    """Attaches character names to stat dictionaries for simulation logging or detailed displays."""
+def enrich_stats_with_metadata(stats_map: dict[str, dict], lineup_data: dict, cards: list[dict]) -> dict[str, dict]:
+    """Attaches character names and positions to stat dictionaries for simulation logging or displays."""
     card_lookup = {c["id"]: c for c in cards}
     enriched = {}
     for slot, stats in stats_map.items():
         cid = lineup_data.get(slot)
-        name = card_lookup[cid]["name"] if cid else "None"
-        enriched[slot] = {**stats, "name": name}
+        card = card_lookup.get(cid) if cid else None
+        name = card["name"] if card else "None"
+        position = card.get("position") if card else None
+        enriched[slot] = {**stats, "name": name, "position": position}
     return enriched
 
 
@@ -32,8 +34,8 @@ def prepare_match_matchup(
     opponent_stats = apply_setter_debuff(opponent_stats, user_lineup_data, user_stats, user_cards)
 
     # Enrich both final stat maps with character names
-    user_stats = enrich_stats_with_names(user_stats, user_lineup_data, user_cards)
-    opponent_stats = enrich_stats_with_names(opponent_stats, opponent_lineup_data, opponent_cards)
+    user_stats = enrich_stats_with_metadata(user_stats, user_lineup_data, user_cards)
+    opponent_stats = enrich_stats_with_metadata(opponent_stats, opponent_lineup_data, opponent_cards)
 
     return user_stats, opponent_stats
 

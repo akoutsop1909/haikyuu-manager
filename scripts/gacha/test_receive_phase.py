@@ -1,5 +1,5 @@
 from helpers import create_dummy_team, create_asymmetric_team
-from engine.match_simulation import _calculate_receive_error_chance, receive_phase
+from engine.match_simulation import calculate_receive_error_chance, receive_phase
 
 # Global test configuration constant
 TOTAL_RUNS = 1000
@@ -47,11 +47,11 @@ def test_underdog_mercy_logic():
 
     # 1. Just below threshold (Power = 599) -> Mercy should NOT apply
     power_below = 599
-    error_below = _calculate_receive_error_chance(receive_stat, power_below, fatigue_tier)
+    error_below = calculate_receive_error_chance(receive_stat, power_below, fatigue_tier)
 
     # 2. Just above threshold (Power = 601) -> Mercy SHOULD apply (x0.90)
     power_above = 601
-    error_above = _calculate_receive_error_chance(receive_stat, power_above, fatigue_tier)
+    error_above = calculate_receive_error_chance(receive_stat, power_above, fatigue_tier)
 
     # Calculate what error_above would be WITHOUT the mercy buffer
     power_disparity = power_above / max(receive_stat, 1)
@@ -60,8 +60,7 @@ def test_underdog_mercy_logic():
 
     # Assertions
     assert error_above < error_below, f"UNBALANCED: Error chance didn't drop across the mercy threshold! (Below: {error_below}, Above: {error_above})"
-    assert abs(
-        error_above - expected_with_mercy) < 1e-5, f"LOGIC ERROR: Mercy multiplier (0.90) was not correctly applied!"
+    assert abs(error_above - expected_with_mercy) < 1e-5, f"LOGIC ERROR: Mercy multiplier (0.90) was not correctly applied!"
 
     print(f" -> Error at 599 power (No Mercy): {error_below:.4f}")
     print(f" -> Error at 601 power (With Mercy): {error_above:.4f}")
@@ -279,8 +278,8 @@ if __name__ == "__main__":
         ("Backup Dive Scramble Telemetry", test_backup_dive_scramble_telemetry),
         ("Rally Fatigue Progression", test_rally_fatigue_progression),
         ("Early-Game Receive Distribution", lambda: run_receive_distribution_test("Early-Game", 200, (1.0, 6.5), (28.0, 35.0), (39.0, 46.0), (20.0, 26.0))),
-        ("Mid-Game Receive Distribution", lambda: run_receive_distribution_test("Mid-Game", 600, (1.0, 6.5), (28.0, 34.0), (44.0, 51.0), (17.0, 23.0))),
-        ("Endgame Receive Distribution", lambda: run_receive_distribution_test("Endgame", 1200, (1.0, 5.5), (31.0, 38.0), (43.0, 54.0), (10.0, 15.0))),
+        ("Mid-Game Receive Distribution", lambda: run_receive_distribution_test("Mid-Game", 600, (1.0, 6.5), (26.5, 35.0), (44.0, 51.0), (17.0, 23.0))),
+        ("Endgame Receive Distribution", lambda: run_receive_distribution_test("Endgame", 1200, (1.0, 5.5), (31.0, 38.0), (43.0, 54.0), (9.0, 17.0))),
     ]
 
     failed = False

@@ -34,7 +34,7 @@ def test_libero_emergency_setter_fallback():
 
     # Ensure libero CANNOT perform a setter dump even on a perfect pass
     dump_count = 0
-    for _ in range(500):
+    for _ in range(TOTAL_RUNS):
         dump_res = set_phase(pass_quality="perfect", pass_modifier=1.25, receiver_slot="setter", team_stats=team,
                              rotation_step=0)
         if dump_res.get("outcome") == "incoming_dump":

@@ -26,3 +26,18 @@ def create_asymmetric_team(base_serve=100, base_receive=200, base_set=100, base_
     }
 
     return team
+
+
+def add_pinch_server(team: dict, serve_val=900, receive_val=100, set_val=100, spike_val=100, block_val=100, position="MB",) -> dict:
+    """Attaches a pinch server card to an existing team dictionary."""
+    team["pinch_server"] = {
+        "name": "TestPinchServer",
+        "position": position,
+        "serve": serve_val,
+        "receive": receive_val,
+        "set": set_val,
+        "spike": spike_val,
+        "block": block_val,
+    }
+
+    return team
