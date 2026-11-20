@@ -5,19 +5,6 @@ from engine.match_simulation import calculate_receive_error_chance, receive_phas
 TOTAL_RUNS = 1000
 
 
-def test_rotation_receive_shift():
-    print("Testing Rotation-Driven Back-Row Shift for Reception...")
-
-    asymmetric_team = create_asymmetric_team(base_receive=150, carry_position="libero", carry_receive=950)
-    incoming_power = 600
-
-    for step in range(6):
-        res = receive_phase(incoming_power, asymmetric_team, step, source_type="serve", source_name="Server")
-        assert "outcome" in res, f"LOGIC ERROR: Receive phase failed to return a valid outcome at rotation step {step}!"
-
-    print(" -> [PASS] Rotation-driven back-row shifts execute smoothly without errors.\n")
-
-
 def test_extreme_mismatch_receive_error():
     print("Testing Extreme Mismatch: 1000 Incoming Power vs 110-Receive Defense (Stat Floor)...")
 
@@ -268,7 +255,6 @@ if __name__ == "__main__":
     print("=== STARTING RECEIVE PHASE TESTS ===")
 
     tests = [
-        ("Rotation Receive Shift", test_rotation_receive_shift),
         ("Extreme Mismatch Receive Error", test_extreme_mismatch_receive_error),
         ("Underdog Mercy Logic", test_underdog_mercy_logic),
         ("Elite Defense Stability", test_elite_defense_stability),

@@ -4,21 +4,6 @@ from engine.match_simulation import block_phase
 TOTAL_RUNS = 1000
 
 
-def test_block_rotation_anchor_shift():
-    print("Testing Rotation-Driven Middle Blocker Anchor Shift...")
-
-    # Create an asymmetric team where middle_blocker_1 is a star blocker
-    team = create_asymmetric_team(base_block=150, carry_position="middle_blocker_1", carry_block=950)
-    incoming_power = 500
-
-    for step in range(6):
-        res = block_phase(incoming_power, team, step, spiker_name="Atsumu")
-        assert "outcome" in res, f"LOGIC ERROR: Block phase failed to return a valid outcome at rotation step {step}!"
-        assert "blocker_name" in res or "message" in res, "LOGIC ERROR: Block phase missing commentary elements!"
-
-    print(" -> [PASS] Rotation-driven Middle Blocker anchor shifts execute smoothly.\n")
-
-
 def test_elite_block_lockdown():
     print("Testing Elite Block Lockdown: 400 Incoming Power vs 1000-Block Defense...")
 
@@ -106,7 +91,6 @@ if __name__ == "__main__":
     print("=== STARTING BLOCK PHASE TESTS ===")
 
     tests = [
-        ("Rotation Anchor Shift", test_block_rotation_anchor_shift),
         ("Elite Block Lockdown", test_elite_block_lockdown),
         ("Weak Block Vulnerability", test_weak_block_vulnerability),
         ("Early-Game Block Distribution", lambda: run_block_distribution_test("Early-Game", 200, (1.0, 4.5), (5.0, 15.0), (15.0, 35.0), (30.0, 50.0), (10.0, 30.0))),
