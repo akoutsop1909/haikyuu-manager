@@ -85,11 +85,11 @@ def test_setter_dump_wildcard_frequency():
     else:
         perf_pct = good_pct = poor_pct = 0.0
 
-    print(f" -> Setter Dump triggered in {dump_pct:.1f}% of perfect passes (Target: ~12%)")
+    print(f" -> Setter Dump triggered in {dump_pct:.1f}% of perfect passes (Target: ~60%)")
     print(f"    (Dump Qualities -> Perfect: {perf_pct:.1f}%, Good: {good_pct:.1f}%, Poor: {poor_pct:.1f}%)")
 
-    # Expect roughly 12% frequency (allowing generous statistical bounds between 8% and 17%)
-    assert 8.0 <= dump_pct <= 17.0, f"UNBALANCED: Setter dump trigger rate of {dump_pct}% is out of bounds!"
+    # Expect roughly 60% frequency on direct perfect-pass calls
+    assert 54.0 <= dump_pct <= 67.0, f"UNBALANCED: Setter dump trigger rate of {dump_pct}% is out of bounds!"
     print(" -> [PASS] Setter dump wildcard frequency is properly balanced.\n")
 
 

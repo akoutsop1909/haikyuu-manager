@@ -289,7 +289,6 @@ def set_phase(pass_quality: str, pass_modifier: float, receiver_slot: str,
         set_stat = setter_card["set"]
     else:
         # Edge case: the setter received the ball and cannot set!
-        # Pass is_serving down here so the pinch server stays on the court!
         formation = get_current_rotation(team_stats, rotation_step, pinch_active=pinch_active)
         active_players = {**formation["front_row"], **formation["back_row"]}
 
@@ -309,7 +308,7 @@ def set_phase(pass_quality: str, pass_modifier: float, receiver_slot: str,
     setter_name = setter_card["name"]
 
     # --- SETTER DUMP CHECK (The Wildcard) ---
-    if receiver_slot != "setter" and pass_quality == "perfect" and random.random() < 0.12:
+    if receiver_slot != "setter" and pass_quality == "perfect" and random.random() < 0.60:
         dump_tier_bias = set_stat / 15000
         effective_mean = set_stat * (1.0 + dump_tier_bias)
 
@@ -647,7 +646,7 @@ def run_match_simulation(user_stats: dict, opponent_stats: dict, debug: bool = F
     serving_team = "user"
     match_log = []
 
-    while user_score < 5 and opponent_score < 5:
+    while True:
         rally_res = simulate_single_rally(
             user_stats, opponent_stats, serving_team,
             user_rotation_step, opp_rotation_step,
@@ -670,8 +669,10 @@ def run_match_simulation(user_stats: dict, opponent_stats: dict, debug: bool = F
         else:
             opponent_score += 1
 
+        if user_score >= 5 or opponent_score >= 5:
+            break
+
         if scoring_team != serving_team:
-            # The team that just lost the serve no longer has their pinch server active
             if serving_team == "user":
                 user_pinch_active = False
             else:

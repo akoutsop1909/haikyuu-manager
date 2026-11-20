@@ -1,4 +1,4 @@
-from helpers import create_dummy_team, create_asymmetric_team
+from helpers import create_dummy_team, create_asymmetric_team, add_pinch_server
 from engine.match_simulation import simulate_single_rally, run_match_simulation
 
 TOTAL_RUNS = 1000
@@ -56,6 +56,35 @@ def test_whale_vs_beginner_dominance():
     # Diagnostic assertion: A fully maxed-out team should crush a level-200 team nearly 100% of the time.
     assert whale_win_pct >= 95.0, f"UNBALANCED: Whale team win rate of {whale_win_pct}% is too low! Stats aren't rewarding enough."
     print(" -> [PASS] Whale vs beginner dominance verified successfully.\n")
+
+
+def test_pinch_server_full_match_impact():
+    print("Testing Pinch Server Impact in Full Matches...")
+
+    base_no_pinch = create_dummy_team(serve_val=50, receive_val=500, set_val=500, spike_val=500, block_val=500)
+    with_pinch = add_pinch_server(
+        create_dummy_team(serve_val=50, receive_val=500, set_val=500, spike_val=500, block_val=500), serve_val=1200
+    )
+    opponent = create_dummy_team(serve_val=500, receive_val=500, set_val=500, spike_val=500, block_val=500)
+
+    no_pinch_wins = sum(
+        1 for _ in range(TOTAL_RUNS)
+        if run_match_simulation(base_no_pinch, opponent, debug=False)["user_score"] == 5
+    )
+    pinch_wins = sum(
+        1 for _ in range(TOTAL_RUNS)
+        if run_match_simulation(with_pinch, opponent, debug=False)["user_score"] == 5
+    )
+
+    no_pinch_pct = (no_pinch_wins / TOTAL_RUNS) * 100
+    pinch_pct = (pinch_wins / TOTAL_RUNS) * 100
+    print(f" -> Win Rate Without Pinch Server: {no_pinch_pct:.1f}%")
+    print(f" -> Win Rate With 1200-Serve Pinch Server: {pinch_pct:.1f}%")
+
+    assert pinch_pct > no_pinch_pct, (
+        f"LOGIC ERROR: Pinch server did not improve win rate ({pinch_pct:.1f}% vs {no_pinch_pct:.1f}%)!"
+    )
+    print(" -> [PASS] Pinch server provides a measurable win-rate boost in full matches.\n")
 
 
 def get_shared_audit_data():
@@ -116,8 +145,8 @@ def test_chained_set_audit():
     print(f" -> Results: {dump_pct:.1f}% Setter Dump")
     print(f"    (Qualities -> Perfect: {set_perf:.1f}%, Good: {set_good:.1f}%, Poor: {set_poor:.1f}%)")
 
-    assert 1.0 <= dump_pct <= 5.0, f"UNBALANCED: Chained setter dump rate of {dump_pct}% is out of bounds!"
-    assert 23.0 <= set_perf <= 34.0, f"UNBALANCED: Chained set perfect rate of {set_perf}% is out of bounds!"
+    assert 7.0 <= dump_pct <= 16.0, f"UNBALANCED: Chained setter dump rate of {dump_pct}% is out of bounds!"
+    assert 20.0 <= set_perf <= 34.0, f"UNBALANCED: Chained set perfect rate of {set_perf}% is out of bounds!"
     assert 32.0 <= set_good <= 43.0, f"UNBALANCED: Chained set good rate of {set_good}% is out of bounds!"
     assert 28.0 <= set_poor <= 40.0, f"UNBALANCED: Chained set poor rate of {set_poor}% is out of bounds!"
     print(" -> [PASS] Chained Set Audit passed.\n")
@@ -205,6 +234,7 @@ if __name__ == "__main__":
     tests = [
         ("Hyper-Carry Setter Balance", test_hyper_carry_setter_balance),
         ("Whale vs Beginner Dominance", test_whale_vs_beginner_dominance),
+        ("Pinch Server Full Match Impact", test_pinch_server_full_match_impact),
         ("Chained Receive Audit", test_chained_receive_audit),
         ("Chained Set Audit", test_chained_set_audit),
         ("Chained Spike Audit", test_chained_spike_audit),

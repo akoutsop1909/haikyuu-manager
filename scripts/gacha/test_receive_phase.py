@@ -245,7 +245,7 @@ def run_receive_distribution_test(test_name, stat_val, out_bounds, perfect_bound
 
     assert min_out <= out_pct <= max_out, f"UNBALANCED: Reception out rate of {out_pct}% is out of bounds!"
     assert min_perf <= perf_pct <= max_perf, f"UNBALANCED: Perfect pass rate of {perf_pct}% is out of bounds!"
-    assert min_perf <= good_pct <= max_good, f"UNBALANCED: Good pass rate of {good_pct}% is out of bounds!"
+    assert min_good <= good_pct <= max_good, f"UNBALANCED: Good pass rate of {good_pct}% is out of bounds!"
     assert min_poor <= poor_pct <= max_poor, f"UNBALANCED: Poor pass rate of {poor_pct}% is out of bounds!"
 
     print(f" -> [PASS] {test_name} Receive Distribution is healthy and balanced.\n")
