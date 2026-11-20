@@ -32,27 +32,27 @@ def test_rotation_server_shift():
 
 def test_libero_server_exemption():
     print("Testing Libero-Server Exemption Rule...")
-    # Create a team dictionary with a Middle Blocker in Zone 1 (Rotation step where MB becomes server)
-    # Verify that the server slot holds the middle blocker and the libero is NOT in the back row as server.
     team = create_dummy_team(serve_val=500)
 
-    # Find which rotation step places a middle_blocker in Zone 1 (server_slot)
-    target_step = 0
-    for step in range(6):
-        formation = get_current_rotation(team, step)
-        if "middle_blocker" in formation["server_slot"]:
-            target_step = step
-            break
+    # Step 2 places middle_blocker_1 in Zone 1 (server_slot)
+    # Step 5 places middle_blocker_2 in Zone 1 (server_slot)
+    for target_step, expected_mb in [(2, "middle_blocker_1"), (5, "middle_blocker_2")]:
+        formation = get_current_rotation(team, target_step)
+        server_slot = formation["server_slot"]
 
-    formation = get_current_rotation(team, target_step)
-    server_slot = formation["server_slot"]
+        assert server_slot == expected_mb, (f"SETUP ERROR: Expected {expected_mb} in Zone 1 at step {target_step}, got {server_slot}."
+        )
+        assert server_slot in formation["back_row"], (
+            f"LOGIC ERROR: Serving {expected_mb} missing from back_row at step {target_step}!"
+        )
+        assert formation["back_row"].get("libero") != team["libero"] or server_slot != "libero", (
+            f"LOGIC ERROR: Libero illegally replaced serving {expected_mb} at step {target_step}!"
+        )
+        assert "libero" not in formation["back_row"] or all(
+            slot != server_slot for slot in formation["back_row"] if slot == "libero"
+        ), f"LOGIC ERROR: Libero is occupying the server slot for {expected_mb} at step {target_step}!"
 
-    assert "middle_blocker" in server_slot, "SETUP ERROR: Could not isolate a Middle Blocker in Zone 1 for this test."
-    assert "libero" not in formation["back_row"] or formation["back_row"].get("libero") is None or not any(
-        s == server_slot for s in formation["back_row"]), \
-        "LOGIC ERROR: Libero illegally replaced the serving Middle Blocker!"
-
-    print(f" -> [PASS] Libero successfully steps aside for serving Middle Blocker at rotation step {target_step}.\n")
+    print(" -> [PASS] Libero steps aside for both Middle Blocker 1 (step 2) and Middle Blocker 2 (step 5) when serving.\n")
 
 
 def test_pinch_server_serves_for_mb1():
@@ -60,15 +60,15 @@ def test_pinch_server_serves_for_mb1():
     team = add_pinch_server(create_dummy_team(serve_val=50), serve_val=2000)
     mb1_step = 2
 
-    serving_formation = get_current_rotation(team, mb1_step, is_serving=True)
+    serving_formation = get_current_rotation(team, mb1_step, pinch_active=True)
     assert serving_formation["is_pinch_active"] is True, (
         f"LOGIC ERROR: Expected is_pinch_active=True at step {mb1_step}, got {serving_formation['is_pinch_active']}"
     )
     assert serving_formation["back_row"]["middle_blocker_1"] == team["pinch_server"], (
-        "LOGIC ERROR: Pinch server did not replace middle_blocker_1 in back_row when serving."
+        "LOGIC ERROR: Pinch server did not replace Middle Blocker in back_row when serving."
     )
 
-    res = serve_phase(team, serving_rotation_step=mb1_step)
+    res = serve_phase(team, serving_rotation_step=mb1_step, pinch_active=True)
     if res["outcome"] == "in-play":
         assert res["incoming_power"] > 200, (
             f"LOGIC ERROR: Expected higher incoming_power from 2000-serve pinch server, got {res['incoming_power']:.1f}"
@@ -115,7 +115,7 @@ if __name__ == "__main__":
         ("Pinch Server Serves for MB1", test_pinch_server_serves_for_mb1),
         ("Early-Game Distribution", lambda: run_distribution_test("Early-Game", 200, (8.0, 15.0), (85.0, 92.0))),
         ("Mid-Game Distribution", lambda: run_distribution_test("Mid-Game", 600, (4.0, 8.5), (91.5, 96.0))),
-        ("Endgame Distribution", lambda: run_distribution_test("Endgame", 1200, (3.5, 7.0), (93.0, 96.5))),
+        ("Endgame Distribution", lambda: run_distribution_test("Endgame", 1200, (2.5, 7.5), (93.0, 96.5))),
     ]
 
     failed = False

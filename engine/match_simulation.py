@@ -65,26 +65,28 @@ def _get_player_role(slot_name: str) -> str:
     return ""
 
 
-def _handle_side_out(team_stats: dict, rotation_step: int) -> tuple[int, str]:
-    """Helper to advance rotation and format the side-out log message."""
+def _handle_side_out(team_stats: dict, rotation_step: int) -> tuple[int, bool, str]:
+    """Advances rotation, activates pinch server if MB1 is now serving, and formats log."""
     new_rotation_step = (rotation_step + 1) % 6
 
-    # Pass is_serving=True so it checks for the pinch server!
-    formation = get_current_rotation(team_stats, new_rotation_step, is_serving=True)
-    server_slot = formation["server_slot"]
+    # Check who the new server slot is without pinch active first
+    base_formation = get_current_rotation(team_stats, new_rotation_step, pinch_active=False)
+    server_slot = base_formation["server_slot"]
 
-    # Pull the name from back_row in case the pinch server is active
+    new_pinch_active = (server_slot == "middle_blocker_1") and ("pinch_server" in team_stats)
+
+    formation = get_current_rotation(team_stats, new_rotation_step, pinch_active=new_pinch_active)
     server_card = formation["back_row"][server_slot]
     server_name = server_card["name"]
 
     message = f"🔄 Side-out! **{server_name}** rotates to the service line."
-    return new_rotation_step, message
+    return new_rotation_step, new_pinch_active, message
 
 # ==============================================================================
 # 3. ROTATION MANAGEMENT & MATCH PHASES
 # ==============================================================================
-def get_current_rotation(team_stats: dict, rotation_step: int, is_serving: bool = False) -> dict:
-    """Calculates court rotation, handles libero rules, and swaps in the pinch server if applicable."""
+def get_current_rotation(team_stats: dict, rotation_step: int, pinch_active: bool = False) -> dict:
+    """Calculates court rotation, handles libero rules, and keeps pinch server in if active."""
     offset = rotation_step % len(ROTATION_ORDER)
     current_lineup = ROTATION_ORDER[-offset:] + ROTATION_ORDER[:-offset]
 
@@ -97,9 +99,7 @@ def get_current_rotation(team_stats: dict, rotation_step: int, is_serving: bool 
     server_slot = back_slots[0]
 
     # --- PINCH SERVER SUBSTITUTION LOGIC ---
-    # If this team is serving, and MB1 is the server, and a pinch server exists:
-    if is_serving and server_slot == "middle_blocker_1" and "pinch_server" in team_stats:
-        # Temporarily replace middle_blocker_1 with the pinch_server for this rally
+    if pinch_active and server_slot == "middle_blocker_1" and "pinch_server" in team_stats:
         back_row[server_slot] = team_stats["pinch_server"]
         is_pinch_active = True
     else:
@@ -123,11 +123,11 @@ def get_current_rotation(team_stats: dict, rotation_step: int, is_serving: bool 
     }
 
 
-def serve_phase(serving_team_stats: dict, serving_rotation_step: int) -> dict:
-    serving_formation = get_current_rotation(serving_team_stats, serving_rotation_step, is_serving=True)
+def serve_phase(serving_team_stats: dict, serving_rotation_step: int, pinch_active: bool = False) -> dict:
+    serving_formation = get_current_rotation(serving_team_stats, serving_rotation_step, pinch_active=pinch_active)
     server_slot = serving_formation["server_slot"]
 
-    # Pulls the active server card (automatically grabs pinch_server if active)
+    # Pulls the active server card (automatically grabs pinch_server if pinch_active is True)
     server_card = serving_formation["back_row"][server_slot]
     serve_power = server_card["serve"]
     server_name = server_card["name"]
@@ -166,8 +166,8 @@ def serve_phase(serving_team_stats: dict, serving_rotation_step: int) -> dict:
 
 def receive_phase(incoming_power: float, receiving_team_stats: dict, receiving_rotation_step: int,
                   source_type: str, source_name: str, net_cross_count: int = 1,
-                  is_serving: bool = False) -> dict:
-    formation = get_current_rotation(receiving_team_stats, receiving_rotation_step, is_serving=is_serving)
+                  pinch_active: bool = False) -> dict:
+    formation = get_current_rotation(receiving_team_stats, receiving_rotation_step, pinch_active=pinch_active)
     back_row = formation["back_row"]
     back_row_players = list(back_row.items())
 
@@ -279,7 +279,7 @@ def receive_phase(incoming_power: float, receiving_team_stats: dict, receiving_r
     }
 
 def set_phase(pass_quality: str, pass_modifier: float, receiver_slot: str,
-              team_stats: dict, rotation_step: int, is_serving: bool = False) -> dict:
+              team_stats: dict, rotation_step: int, pinch_active: bool = False) -> dict:
     """Simulates the setting phase, supporting pinch servers during emergency setter lookups."""
     designated_setter = team_stats.get("setter")
 
@@ -290,7 +290,7 @@ def set_phase(pass_quality: str, pass_modifier: float, receiver_slot: str,
     else:
         # Edge case: the setter received the ball and cannot set!
         # Pass is_serving down here so the pinch server stays on the court!
-        formation = get_current_rotation(team_stats, rotation_step, is_serving=is_serving)
+        formation = get_current_rotation(team_stats, rotation_step, pinch_active=pinch_active)
         active_players = {**formation["front_row"], **formation["back_row"]}
 
         if "libero" in active_players:
@@ -373,8 +373,8 @@ def set_phase(pass_quality: str, pass_modifier: float, receiver_slot: str,
 
 
 def spike_phase(attack_modifier: float, setter_name: str, attacking_team_stats: dict,
-                rotation_step: int, is_serving: bool = False) -> dict:
-    formation = get_current_rotation(attacking_team_stats, rotation_step, is_serving=is_serving)
+                rotation_step: int, pinch_active: bool = False) -> dict:
+    formation = get_current_rotation(attacking_team_stats, rotation_step, pinch_active=pinch_active)
 
     # Get the pinch server card if it exists
     pinch_card = attacking_team_stats.get("pinch_server")
@@ -505,6 +505,7 @@ def block_phase(incoming_power: float, defending_team_stats: dict, defending_rot
 # ==============================================================================
 def simulate_single_rally(user_stats: dict, opponent_stats: dict, serving_team: str,
                           user_rotation_step: int, opp_rotation_step: int,
+                          user_pinch_active: bool = False, opp_pinch_active: bool = False,
                           audit_dict: dict = None,
                           debug: bool = False) -> dict:
     match_log = []
@@ -512,17 +513,19 @@ def simulate_single_rally(user_stats: dict, opponent_stats: dict, serving_team: 
 
     # --- 1. SERVE PHASE ---
     if serving_team == "user":
-        serve_res = serve_phase(user_stats, user_rotation_step)
+        serve_res = serve_phase(user_stats, user_rotation_step, pinch_active=user_pinch_active)
         attacking_team = "user"
         defending_team = "opponent"
         def_stats = opponent_stats
         def_rot = opp_rotation_step
+        def_pinch = opp_pinch_active
     else:
-        serve_res = serve_phase(opponent_stats, opp_rotation_step)
+        serve_res = serve_phase(opponent_stats, opp_rotation_step, pinch_active=opp_pinch_active)
         attacking_team = "opponent"
         defending_team = "user"
         def_stats = user_stats
         def_rot = user_rotation_step
+        def_pinch = user_pinch_active
 
     if serve_res["outcome"] == "out":
         match_log.append(serve_res["message"])
@@ -538,13 +541,10 @@ def simulate_single_rally(user_stats: dict, opponent_stats: dict, serving_team: 
 
     # --- RALLY LOOP ---
     while True:
-        # Determine if the currently defending team is the original serving team
-        def_is_serving = (defending_team == serving_team)
-
         # --- 2. RECEIVE PHASE ---
         receive_res = receive_phase(
             incoming_power, def_stats, def_rot, source_type, source_name,
-            net_cross_count, is_serving=def_is_serving
+            net_cross_count, pinch_active=def_pinch
         )
 
         if audit_dict is not None:
@@ -569,13 +569,14 @@ def simulate_single_rally(user_stats: dict, opponent_stats: dict, serving_team: 
         attacking_team, defending_team = defending_team, attacking_team
         atk_stats = user_stats if attacking_team == "user" else opponent_stats
         atk_rot = user_rotation_step if attacking_team == "user" else opp_rotation_step
+        atk_pinch = user_pinch_active if attacking_team == "user" else opp_pinch_active
+
         def_stats = user_stats if defending_team == "user" else opponent_stats
         def_rot = user_rotation_step if defending_team == "user" else opp_rotation_step
-
-        atk_is_serving = (attacking_team == serving_team)
+        def_pinch = user_pinch_active if defending_team == "user" else opp_pinch_active
 
         # --- 3. SET PHASE ---
-        set_res = set_phase(pass_quality, pass_modifier, receiver_slot, atk_stats, atk_rot, is_serving=atk_is_serving)
+        set_res = set_phase(pass_quality, pass_modifier, receiver_slot, atk_stats, atk_rot, pinch_active=atk_pinch)
 
         if audit_dict is not None:
             if set_res["outcome"] == "incoming_dump":
@@ -596,7 +597,7 @@ def simulate_single_rally(user_stats: dict, opponent_stats: dict, serving_team: 
             match_log.append(set_res["message"])
 
         # --- 4. SPIKE PHASE ---
-        spike_res = spike_phase(set_res["attack_modifier"], set_res["setter_name"], atk_stats, atk_rot, is_serving=atk_is_serving)
+        spike_res = spike_phase(set_res["attack_modifier"], set_res["setter_name"], atk_stats, atk_rot, pinch_active=atk_pinch)
 
         if audit_dict is not None:
             audit_dict["spike"][spike_res["quality"]] += 1
@@ -627,7 +628,7 @@ def simulate_single_rally(user_stats: dict, opponent_stats: dict, serving_team: 
             scoring_team = defending_team
             return {"scoring_team": scoring_team, "match_log": match_log}
 
-        elif block_res["outcome"] == "in-play":
+        else:
             if debug:
                 match_log.append(block_res["message"])
             incoming_power = block_res["mitigated_power"]
@@ -641,6 +642,8 @@ def run_match_simulation(user_stats: dict, opponent_stats: dict, debug: bool = F
     opponent_score = 0
     user_rotation_step = 0
     opp_rotation_step = 0
+    user_pinch_active = False
+    opp_pinch_active = False
     serving_team = "user"
     match_log = []
 
@@ -648,21 +651,17 @@ def run_match_simulation(user_stats: dict, opponent_stats: dict, debug: bool = F
         rally_res = simulate_single_rally(
             user_stats, opponent_stats, serving_team,
             user_rotation_step, opp_rotation_step,
+            user_pinch_active=user_pinch_active,
+            opp_pinch_active=opp_pinch_active,
             debug=debug
         )
         scoring_team = rally_res["scoring_team"]
-
-        # Choose the emoji based on who scored this rally
         emoji = "🔵" if scoring_team == "user" else "🔴"
 
-        # Apply the emoji to the final scoring line of the rally log
         if rally_res["match_log"]:
-            # If debug=True, add standard bullets to intermediate lines, and the emoji to the scoring line
             if debug:
                 for line in rally_res["match_log"][:-1]:
                     match_log.append(f"> {line}")
-
-            # The last line of the rally log is always the scoring event!
             scoring_line = rally_res["match_log"][-1]
             match_log.append(f"{emoji} {scoring_line}")
 
@@ -672,12 +671,18 @@ def run_match_simulation(user_stats: dict, opponent_stats: dict, debug: bool = F
             opponent_score += 1
 
         if scoring_team != serving_team:
+            # The team that just lost the serve no longer has their pinch server active
+            if serving_team == "user":
+                user_pinch_active = False
+            else:
+                opp_pinch_active = False
+
             serving_team = scoring_team
             if scoring_team == "user":
-                user_rotation_step, log_msg = _handle_side_out(user_stats, user_rotation_step)
+                user_rotation_step, user_pinch_active, log_msg = _handle_side_out(user_stats, user_rotation_step)
                 match_log.append(log_msg)
             else:
-                opp_rotation_step, log_msg = _handle_side_out(opponent_stats, opp_rotation_step)
+                opp_rotation_step, opp_pinch_active, log_msg = _handle_side_out(opponent_stats, opp_rotation_step)
                 match_log.append(log_msg)
 
     return {
