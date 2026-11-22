@@ -1,13 +1,10 @@
-"""Utility script to query and list available Gemini text/multimodal models.
-
-Run this script to verify your API key and check which models support the
-`generateContent` endpoint used by the bot.
-"""
+"""Utility script to list reachable Gemini text/chat models for your API key."""
 
 import os
 import sys
 from dotenv import load_dotenv
 from google import genai
+from google.genai import errors
 
 load_dotenv()
 
@@ -17,21 +14,29 @@ if not GEMINI_API_KEY:
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
+SKIP_KEYWORDS = ("image", "nano-banana", "audio", "omni", "tts", "transcribe", "embedding", "veo", "imagen", "lyria", "deep-research")
+
 try:
-    # Filter for models that support content generation (text/multimodal)
-    gen_models = [
-        m.name.replace("models/", "")
-        for m in client.models.list()
-        if "generateContent" in m.supported_actions
-    ]
-
-    formatted_list = "\n  • ".join(gen_models)
-
-    print("\nAvailable Gemini Generation Models:")
-    print("-" * 40)
-    print(f"  • {formatted_list}")
-    print("-" * 40 + "\n")
-
+    models = list(client.models.list())
 except Exception as e:
     print(f"Failed to fetch models: {e}")
     sys.exit(1)
+
+candidates = [
+    m.name.removeprefix("models/")
+    for m in models
+    if "generateContent" in (m.supported_actions or [])
+    and not any(w in m.name.lower() for w in SKIP_KEYWORDS)
+]
+
+available = []
+for name in candidates:
+    try:
+        client.models.count_tokens(model=name, contents="test")
+        available.append(name)
+    except errors.APIError:
+        pass
+
+print("\nAvailable models:")
+for name in available:
+    print(f"- {name}")
