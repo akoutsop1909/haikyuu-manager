@@ -60,37 +60,31 @@ def test_highest_stat_emergency_setter_fallback():
     print(" -> [PASS] Highest-stat emergency setter fallback selects the optimal substitute correctly when the libero is benched.\n")
 
 
-def test_setter_dump_wildcard_frequency():
-    print("Testing Setter Dump Wildcard Frequency & Tiers (~12% on Perfect Pass)...")
+def test_setter_dump_distribution():
+    print("Testing Setter Dump Roll Quality Distribution...")
     team = create_dummy_team(set_val=800)
 
-    dump_triggered_count = 0
     dump_qualities = {"perfect": 0, "good": 0, "poor": 0}
 
     for _ in range(TOTAL_RUNS):
-        # Perfect pass + receiver is NOT setter allows the setter dump check
-        res = set_phase(pass_quality="perfect", pass_modifier=1.25, receiver_slot="wing_spiker_1", team_stats=team, rotation_step=0)
-
+        res = set_phase(pass_quality="perfect", pass_modifier=1.25, receiver_slot="wing_spiker_1", team_stats=team, rotation_step=3)
         if res.get("outcome") == "incoming_dump":
-            dump_triggered_count += 1
             dump_qualities[res["quality"]] += 1
 
-    dump_pct = (dump_triggered_count / TOTAL_RUNS) * 100
+    total_dumps = sum(dump_qualities.values())
+    assert total_dumps > 0, "LOGIC ERROR: No setter dumps triggered during test!"
 
-    # Calculate percentages of each quality relative to the total dumps triggered
-    if dump_triggered_count > 0:
-        perf_pct = (dump_qualities["perfect"] / dump_triggered_count) * 100
-        good_pct = (dump_qualities["good"] / dump_triggered_count) * 100
-        poor_pct = (dump_qualities["poor"] / dump_triggered_count) * 100
-    else:
-        perf_pct = good_pct = poor_pct = 0.0
+    perf_pct = (dump_qualities["perfect"] / total_dumps) * 100
+    good_pct = (dump_qualities["good"] / total_dumps) * 100
+    poor_pct = (dump_qualities["poor"] / total_dumps) * 100
 
-    print(f" -> Setter Dump triggered in {dump_pct:.1f}% of perfect passes (Target: ~60%)")
-    print(f"    (Dump Qualities -> Perfect: {perf_pct:.1f}%, Good: {good_pct:.1f}%, Poor: {poor_pct:.1f}%)")
+    print(f" -> Results -> Perfect: {perf_pct:.1f}%, Good: {good_pct:.1f}%, Poor: {poor_pct:.1f}%")
 
-    # Expect roughly 60% frequency on direct perfect-pass calls
-    assert 54.0 <= dump_pct <= 67.0, f"UNBALANCED: Setter dump trigger rate of {dump_pct}% is out of bounds!"
-    print(" -> [PASS] Setter dump wildcard frequency is properly balanced.\n")
+    assert 15.0 <= perf_pct <= 40.0, f"UNBALANCED: Dump perfect rate of {perf_pct:.1f}% is out of bounds!"
+    assert 40.0 <= good_pct <= 65.0, f"UNBALANCED: Dump good rate of {good_pct:.1f}% is out of bounds!"
+    assert 0.5 <= poor_pct <= 22.0, f"UNBALANCED: Dump poor rate of {poor_pct:.1f}% is out of bounds!"
+
+    print(" -> [PASS] Setter dump roll quality distribution verified.\n")
 
 
 def test_pass_modifier_scaling():
@@ -161,7 +155,7 @@ if __name__ == "__main__":
         ("Standard Setter Flow", test_standard_setter_flow),
         ("Libero Emergency Setter Fallback", test_libero_emergency_setter_fallback),
         ("Highest-Stat Emergency Setter Fallback", test_highest_stat_emergency_setter_fallback),
-        ("Setter Dump Wildcard Frequency", test_setter_dump_wildcard_frequency),
+        ("Setter Dump Distribution", test_setter_dump_distribution),
         ("Pass Modifier Scaling", test_pass_modifier_scaling),
         ("Early-Game Set Distribution", lambda: run_set_distribution_test("Early-Game", 200, (26.0, 35.0), (40.0, 52.0), (19.0, 28.0))),
         ("Mid-Game Set Distribution", lambda: run_set_distribution_test("Mid-Game", 600, (29.0, 38.0), (42.0, 53.0), (15.0, 23.0))),

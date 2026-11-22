@@ -97,13 +97,17 @@ def get_shared_audit_data():
         audit = {
             "receive": {"perfect": 0, "good": 0, "poor": 0, "out": 0},
             "set": {"perfect": 0, "good": 0, "poor": 0, "incoming_dump": 0},
+            "dump_quality": {"perfect": 0, "good": 0, "poor": 0},
             "spike": {"perfect": 0, "good": 0, "poor": 0},
             "block_quality": {"perfect": 0, "good": 0, "poor": 0},
-            "block_outcome": {"out": 0, "kill_block": 0, "in-play": 0}
+            "block_outcome": {"out": 0, "kill_block": 0, "in-play": 0},
         }
 
-        for _ in range(2000):
-            simulate_single_rally(user_team, opp_team, "user", 0, 0, audit_dict=audit)
+        for i in range(2000):
+            rot_step = i % 6
+            user_state = {"stats": user_team, "rot": rot_step, "pinch": False}
+            opp_state = {"stats": opp_team, "rot": rot_step, "pinch": False}
+            simulate_single_rally(user_state, opp_state, "user", audit_dict=audit)
 
         _SHARED_AUDIT_DATA = audit
     return _SHARED_AUDIT_DATA
@@ -143,9 +147,17 @@ def test_chained_set_audit():
     set_poor = (audit["set"]["poor"] / set_qual_total) * 100 if set_qual_total > 0 else 0
 
     print(f" -> Results: {dump_pct:.1f}% Setter Dump")
-    print(f"    (Qualities -> Perfect: {set_perf:.1f}%, Good: {set_good:.1f}%, Poor: {set_poor:.1f}%)")
+    print(f"    (Set Qualities -> Perfect: {set_perf:.1f}%, Good: {set_good:.1f}%, Poor: {set_poor:.1f}%)")
 
-    assert 7.0 <= dump_pct <= 16.0, f"UNBALANCED: Chained setter dump rate of {dump_pct}% is out of bounds!"
+    dump_qual_map = audit.get("dump_quality", {})
+    dump_qual_total = sum(dump_qual_map.values())
+    if dump_qual_total > 0:
+        d_perf = (dump_qual_map.get("perfect", 0) / dump_qual_total) * 100
+        d_good = (dump_qual_map.get("good", 0) / dump_qual_total) * 100
+        d_poor = (dump_qual_map.get("poor", 0) / dump_qual_total) * 100
+        print(f"    (Dump Qualities -> Perfect: {d_perf:.1f}%, Good: {d_good:.1f}%, Poor: {d_poor:.1f}%)")
+
+    assert 7.0 <= dump_pct <= 15.0, f"UNBALANCED: Chained setter dump rate of {dump_pct}% is out of bounds!"
     assert 20.0 <= set_perf <= 34.0, f"UNBALANCED: Chained set perfect rate of {set_perf}% is out of bounds!"
     assert 32.0 <= set_good <= 43.0, f"UNBALANCED: Chained set good rate of {set_good}% is out of bounds!"
     assert 28.0 <= set_poor <= 40.0, f"UNBALANCED: Chained set poor rate of {set_poor}% is out of bounds!"
