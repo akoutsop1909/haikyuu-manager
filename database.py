@@ -17,7 +17,7 @@ from engine.opponent_generator import generate_opponent_team
 from engine.data_loader import (
     CARDS_BY_ID, CARDS_BY_RARITY, BIRTHDAYS_BY_DATE,
     STARTER_PACK, DAILY_REWARD, BIRTHDAY_REWARD, SCOUT_CONFIG,
-    TRAINING_CONFIG, TEAM_CONFIG, TOKYO_TRIP_CONFIG, ADMIN_PACK, ALL_SLOTS
+    TRAINING_CONFIG, TEAM_CONFIG, MATCH_CONFIG, TOKYO_TRIP_CONFIG, ADMIN_PACK, ALL_SLOTS
 )
 
 # Connection pool setup
@@ -752,6 +752,26 @@ async def get_or_create_opponent(user_id: int, difficulty: str, force_regenerate
             user_id, difficulty, json.dumps(new_opponent)
         )
         return new_opponent
+
+
+async def apply_match_rewards(user_id: int, difficulty: str, won: bool):
+    """Deducts match passes and adds win/loss rewards for the given difficulty."""
+    pass_cost = MATCH_CONFIG["pass_cost"]
+    outcome_key = "win" if won else "loss"
+    rew = MATCH_CONFIG["difficulties"][difficulty]["rewards"][outcome_key]
+
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            UPDATE users
+            SET match_passes = match_passes - $2,
+                scout_coins = scout_coins + $3,
+                practice_balls = practice_balls + $4,
+                voucher_scraps = voucher_scraps + $5
+            WHERE user_id = $1
+            """,
+            user_id, pass_cost, rew["scout_coins"], rew["practice_balls"], rew["voucher_scraps"],
+        )
 
 # ==============================================================================
 # 7. TOKYO TRIP

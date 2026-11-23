@@ -87,6 +87,8 @@
     "min_synergy_players": 4
   },
   "MATCH": {
+    "pass_cost": 1,
+    "voucher_redeem_cost": 10,
     "difficulties": {
       "Casual": {
         "rarities": ["R"],
@@ -95,7 +97,19 @@
         "force_school_synergy": false,
         "target_bonds_count": 0,
         "allowed_bond_sizes": [],
-        "has_pinch_server": false
+        "has_pinch_server": false,
+        "rewards": {
+          "win": {
+            "scout_coins": 15,
+            "practice_balls": 100,
+            "voucher_scraps": 0
+          },
+          "loss": {
+            "scout_coins": 0,
+            "practice_balls": 25,
+            "voucher_scraps": 0
+          }
+        }
       },
       "Easy": {
         "rarities": ["R", "SR"],
@@ -104,7 +118,19 @@
         "force_school_synergy": false,
         "target_bonds_count": 1,
         "allowed_bond_sizes": [2],
-        "has_pinch_server": false
+        "has_pinch_server": false,
+        "rewards": {
+          "win": {
+            "scout_coins": 25,
+            "practice_balls": 175,
+            "voucher_scraps": 1
+          },
+          "loss": {
+            "scout_coins": 0,
+            "practice_balls": 50,
+            "voucher_scraps": 0
+          }
+        }
       },
       "Normal": {
         "rarities": ["R", "SR", "SSR"],
@@ -113,7 +139,19 @@
         "force_school_synergy": false,
         "target_bonds_count": 2,
         "allowed_bond_sizes": [2],
-        "has_pinch_server": false
+        "has_pinch_server": false,
+        "rewards": {
+          "win": {
+            "scout_coins": 40,
+            "practice_balls": 300,
+            "voucher_scraps": 2
+          },
+          "loss": {
+            "scout_coins": 5,
+            "practice_balls": 80,
+            "voucher_scraps": 0
+          }
+        }
       },
       "Hard": {
         "rarities": ["SR", "SSR"],
@@ -123,7 +161,19 @@
         "target_bonds_count": 4,
         "allowed_bond_sizes": [2, 3],
         "mandatory_synergy_bond_size": 3,
-        "has_pinch_server": true
+        "has_pinch_server": true,
+        "rewards": {
+          "win": {
+            "scout_coins": 60,
+            "practice_balls": 500,
+            "voucher_scraps": 4
+          },
+          "loss": {
+            "scout_coins": 10,
+            "practice_balls": 140,
+            "voucher_scraps": 0
+          }
+        }
       },
       "Nightmare": {
         "rarities": ["SR", "SSR"],
@@ -133,7 +183,19 @@
         "target_bonds_count": 6,
         "allowed_bond_sizes": [2, 3],
         "mandatory_synergy_bond_size": 3,
-        "has_pinch_server": true
+        "has_pinch_server": true,
+        "rewards": {
+          "win": {
+            "scout_coins": 90,
+            "practice_balls": 800,
+            "voucher_scraps": 6
+          },
+          "loss": {
+            "scout_coins": 15,
+            "practice_balls": 220,
+            "voucher_scraps": 0
+          }
+        }
       }
     }
   },
