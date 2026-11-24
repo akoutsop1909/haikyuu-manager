@@ -127,7 +127,7 @@ class TrainScreenView(BaseCardRosterView):
 
         # Row 3: Resonance & Exchange Actions
         btn_res = discord.ui.Button(label="+1 Resonance", style=discord.ButtonStyle.primary, row=3)
-        btn_redeem = discord.ui.Button(label="Redeem Sports Drink", style=discord.ButtonStyle.secondary, emoji="🥤", row=3)
+        btn_redeem = discord.ui.Button(label="Redeem Sports Drink", style=discord.ButtonStyle.secondary, emoji=DRINK_EMOJI, row=3)
 
         btn_res.disabled = is_max_resonance
         btn_res.callback = self._handle_resonance

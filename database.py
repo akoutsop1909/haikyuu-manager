@@ -600,7 +600,7 @@ async def increase_resonance(user_id: int, card_id: str):
 
 
 async def redeem_drink(user_id: int):
-    """Redeems 1 Sports Drink using drink vouchers. Returns True on success."""
+    """Redeems 1 Sports Drink using drink vouchers."""
     async with pool.acquire() as conn:
         async with conn.transaction():
             await conn.fetchval(
@@ -715,7 +715,7 @@ async def add_to_lineup(user_id: int, lineup_number: int, slot_name: str, card_i
 # 6. MATCH
 # ==============================================================================
 async def consume_match_refresh(user_id: int):
-    """Deducts 1 match refresh if available. Returns True if successful."""
+    """Deducts 1 match refresh if available."""
     async with pool.acquire() as conn:
         await conn.execute(
             """
@@ -725,6 +725,26 @@ async def consume_match_refresh(user_id: int):
             """,
             user_id
         )
+
+
+async def redeem_voucher(user_id: int):
+    """Redeems 1 Drink Voucher using voucher scraps."""
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            scraps = await conn.fetchval(
+                "SELECT voucher_scraps FROM users WHERE user_id = $1 FOR UPDATE",
+                user_id,
+            )
+            vouchers = scraps // MATCH_CONFIG["voucher_redeem_cost"]
+            await conn.execute(
+                """
+                UPDATE users
+                SET voucher_scraps = voucher_scraps - $2,
+                    drink_vouchers = drink_vouchers + $3
+                WHERE user_id = $1
+                """,
+                user_id, vouchers * MATCH_CONFIG["voucher_redeem_cost"], vouchers,
+            )
 
 
 async def get_or_create_opponent(user_id: int, difficulty: str, force_regenerate: bool = False) -> dict:
@@ -756,7 +776,6 @@ async def get_or_create_opponent(user_id: int, difficulty: str, force_regenerate
 
 async def apply_match_rewards(user_id: int, difficulty: str, won: bool):
     """Deducts match passes and adds win/loss rewards for the given difficulty."""
-    pass_cost = MATCH_CONFIG["pass_cost"]
     outcome_key = "win" if won else "loss"
     rew = MATCH_CONFIG["difficulties"][difficulty]["rewards"][outcome_key]
 
@@ -770,7 +789,7 @@ async def apply_match_rewards(user_id: int, difficulty: str, won: bool):
                 voucher_scraps = voucher_scraps + $5
             WHERE user_id = $1
             """,
-            user_id, pass_cost, rew["scout_coins"], rew["practice_balls"], rew["voucher_scraps"],
+            user_id, MATCH_CONFIG["pass_cost"], rew["scout_coins"], rew["practice_balls"], rew["voucher_scraps"],
         )
 
 # ==============================================================================

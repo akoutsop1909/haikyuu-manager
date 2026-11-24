@@ -7,16 +7,21 @@ from engine.data_loader import TEAM_CONFIG, MATCH_CONFIG, STARTING_SLOTS, ALL_SL
 from engine.opponent_generator import unpack_opponent_team
 from engine.mechanics_boosts import apply_lineup_boosts, prepare_match_matchup
 from engine.match_simulation import run_match_simulation
-from database import get_lineups, get_inventory, get_user_cards, get_or_create_opponent, consume_match_refresh, apply_match_rewards
+from database import get_lineups, get_inventory, get_user_cards, get_or_create_opponent, consume_match_refresh, \
+    redeem_voucher, apply_match_rewards
 
 DIFFICULTY_EMOJIS = {"Casual": "🌱", "Easy": "👟", "Normal": "⚡", "Hard": "💥", "Nightmare": "💀"}
 
 # Load match configurations & item medatadata shortcuts
 DEFAULT_LINEUP_NAME = TEAM_CONFIG["default_lineup_name_format"]
+SCRAP_COST = MATCH_CONFIG["voucher_redeem_cost"]
 
 COIN_EMOJI = ITEM_METADATA["coins"]["emoji"]
 BALL_EMOJI = ITEM_METADATA["balls"]["emoji"]
+SCRAP_NAME = ITEM_METADATA["scraps"]["name"]
 SCRAP_EMOJI = ITEM_METADATA["scraps"]["emoji"]
+VOUCHER_NAME = ITEM_METADATA["vouchers"]["name"]
+VOUCHER_EMOJI = ITEM_METADATA["vouchers"]["emoji"]
 
 
 class DifficultySelectMenu(discord.ui.Select):
@@ -57,7 +62,7 @@ class DifficultySelectMenu(discord.ui.Select):
 class MatchScreenView(BaseCardRosterView):
     def __init__(self, user_id: int, user_cards: list[dict], lineups: dict[int, dict] = None,
                  selected_card_id: str | None = None, initial_opponent: dict | None = None,
-                 match_refreshes: int = 0, match_passes: int = 0):
+                 match_refreshes: int = 0, match_passes: int = 0, voucher_scraps: int = 0):
         super().__init__(user_id, user_cards, selected_card_id)
         self.selected_lineup_index = 1
         self.lineups = lineups or {}
@@ -66,6 +71,7 @@ class MatchScreenView(BaseCardRosterView):
         self.current_opponent = initial_opponent or {}
         self.match_refreshes = match_refreshes
         self.match_passes = match_passes
+        self.voucher_scraps = voucher_scraps
         self.latest_match_result: dict | None = None
         self._setup_components()
 
@@ -78,7 +84,16 @@ class MatchScreenView(BaseCardRosterView):
             get_inventory(user_id)
         )
 
-        view = cls(user_id, user_cards, lineups, selected_card_id, initial_opponent, inventory.match_refreshes, inventory.match_passes)
+        view = cls(
+            user_id,
+            user_cards,
+            lineups,
+            selected_card_id,
+            initial_opponent,
+            inventory.match_refreshes,
+            inventory.match_passes,
+            inventory.voucher_scraps,
+        )
         content, embed, attachments = await view._get_screen_payload()
         return view, content, embed, attachments
 
@@ -248,6 +263,10 @@ class MatchScreenView(BaseCardRosterView):
             btn_refresh.callback = self._handle_refresh_click
             self.add_item(btn_refresh)
 
+            btn_redeem = discord.ui.Button(label="Redeem Drink Voucher", style=discord.ButtonStyle.secondary, emoji=VOUCHER_EMOJI, row=1)
+            btn_redeem.callback = self._handle_redeem_voucher_click
+            self.add_item(btn_redeem)
+
             # Row 2: Back button
             btn_back = discord.ui.Button(label="Back", style=discord.ButtonStyle.secondary, emoji="⬅️", row=2)
             btn_back.callback = self._handle_back
@@ -304,7 +323,11 @@ class MatchScreenView(BaseCardRosterView):
         )
         self.match_refreshes = inventory.match_refreshes
         self.match_passes = inventory.match_passes
+        self.voucher_scraps = inventory.voucher_scraps
         self._setup_components()
+
+        content, embed, attachments = await self._get_screen_payload()
+        await interaction.edit_original_response(content=content, embed=embed, view=self, attachments=attachments)
 
         content, embed, attachments = await self._get_screen_payload()
         await interaction.edit_original_response(content=content, embed=embed, view=self, attachments=attachments)
@@ -324,6 +347,18 @@ class MatchScreenView(BaseCardRosterView):
         await lock_view_ui(self, interaction)
         await consume_match_refresh(self.user_id)
         await get_or_create_opponent(self.user_id, self.selected_difficulty, force_regenerate=True)
+        await self.update_screen(interaction)
+
+    async def _handle_redeem_voucher_click(self, interaction: discord.Interaction):
+        if self.voucher_scraps < SCRAP_COST:
+            await interaction.response.send_message(
+                f"❌ You need at least {SCRAP_EMOJI} **{SCRAP_COST}** {SCRAP_NAME} to redeem **1** {VOUCHER_NAME}!",
+                ephemeral=True,
+            )
+            return
+
+        await lock_view_ui(self, interaction)
+        await redeem_voucher(self.user_id)
         await self.update_screen(interaction)
 
     async def _handle_play_again(self, interaction: discord.Interaction):
