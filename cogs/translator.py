@@ -139,7 +139,21 @@ def enhance_tweet_formatting(text: str) -> str:
     if last_arrow_idx != -1:
         tweet_body = tweet_body[:last_arrow_idx] + "🔥" + tweet_body[last_arrow_idx + 2:]
 
-    # 3. Re-assemble the body and the image text block
+    # 3. Join 2+ consecutive standalone hashtag lines at the bottom of tweet_body
+    lines = tweet_body.splitlines()
+    trailing_tags = []
+    while lines and re.fullmatch(r"#\S+", lines[-1].strip()):
+        trailing_tags.append(lines.pop().strip())
+
+    if len(trailing_tags) >= 2:
+        trailing_tags.reverse()
+        lines.append(" ".join(trailing_tags))
+        tweet_body = "\n".join(lines)
+    elif len(trailing_tags) == 1:
+        lines.append(trailing_tags[0])
+        tweet_body = "\n".join(lines)
+
+    # 4. Re-assemble the body and the image text block
     if image_text:
         text = f"{tweet_body}\n\n> 🖼️ **Text from Image**\n{image_text}"
     else:

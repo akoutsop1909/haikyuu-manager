@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 from google import genai
 
 # Add project root to sys.path so Python can find bot.py when running from scripts/
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 # Load .env variables into environment memory
