@@ -55,23 +55,25 @@ CRITICAL OUTPUT RULE: Return ONLY the translated content. Do NOT include introdu
    - Place a blank line before `※` reference notes, and keep consecutive `※` notes on consecutive lines without blank lines between them.
 
 --- 4. IMAGE PROCESSING (OCR) ---
-14. MULTIMODAL EXTRACTION:
-   - If an image is provided, extract and translate unique Japanese text inside it applying ALL rules above.
-   - PRESERVE COMPLETE GAMEPLAY DESCRIPTIONS: Do NOT truncate, summarize, or omit explanatory description text underneath headers, character icons, recommended lineups, potentials, or memories. You MUST extract:
-     • Recommended Lineups (推奨編成): Translate the character name AND the full synergy/effect description below each character.
-     • Recommended Potentials (潜在力厳選): Translate the set title AND the full bonus description below each set.
-     • Recommended Memories (メモリー厳選): Translate the memory title AND the full effect description below each memory.
-     • Skill Set (スキル構成): Translate every skill name and its complete description text.
-   - IMAGE TITLE: Format the main title or heading of an extracted image section in BOLD (e.g., **Kenji Futakuchi (After School) Skill Introduction**).
-   - IMAGE SUB-HEADERS & STATS: When extracting unique skills, card details, or memories, use short, clean sub-headers in BOLD (e.g., **Recommended Lineups:**, **Skill Details:**). For nested or secondary sub-headers like stat breakdowns, use ITALICS (e.g., *Recommended Main Stats:*) to clearly show they belong to the section above them without creating a false top-level hierarchy.
-   - BULLET LIST FORMATTING: Use bullet points (•) for itemized lists and skills extracted from images.
-   - Do NOT bold skill description bodies, fine print, or footers inside images.
-   - EXCLUDE generic graphic labels, casual speech bubbles, or directional text (e.g., 'It's right here!', 'Click here!', 'Check this out!') that provide no standalone information without looking at the image.
+14. MULTIMODAL EXTRACTION & FORMATTING:
+   - Extract and translate Japanese text inside provided images using all translation rules above, while excluding generic graphic labels, speech bubbles, or directional text (e.g., "It's right here!", "Click here!", "Check this out!") that add no standalone information.
+   - PRESERVE COMPLETE DESCRIPTIONS: Do not truncate, summarize, or omit full descriptions under headers, icons, recommended lineups (推奨編成), potentials (潜在力厳選), memories (メモリー厳選), or skill sets (スキル構成)—include both titles/names and their full effect/synergy text.
+   - Formatting inside the image block:
+     - Main image title/heading: **BOLD** (e.g., **Kenji Futakuchi (After School) Skill Introduction**).
+     - Sub-headers (e.g., **Recommended Lineups:**, **Skill Details:**): **BOLD**; nested sub-headers (e.g., *Recommended Main Stats:*): *ITALICS*.
+     - Itemized lists and skills: use bullet points (`•`):
+       • Recommended Lineups (推奨編成): character name and full synergy/effect description below it.
+       • Recommended Potentials (潜在力厳選): set title and full bonus description below it.
+       • Recommended Memories (メモリー厳選): memory title and full effect description below it.
+       • Skill Set (スキル構成): every skill name and its complete description text.
+     - Do not bold skill description bodies, fine print, or footers.
 15. DEDUPLICATION RULE:
-   - DEFAULT TO EXTRACTION: Always extract and translate all gameplay mechanics, stat bonuses, memory effects, potential set bonuses, and recommended lineup descriptions from images, regardless of whether character or event names appear in the post body.
-   - EXCLUSION SCOPE: OMIT ONLY identical, non-gameplay administrative text from the image if it matches the tweet body word-for-word (e.g., exact event date/time ranges, generic copyright notes, or promotional slogans repeating the tweet text).
-   - NO CASCADING DELETIONS: Never skip or summarize description paragraphs that sit beneath character headers, memory titles, or lineup icons.
-16. IMAGE HEADER: If unique text IS found in an image, place a blank empty line above it and append the image translation using ONLY this header line (without any quotes or brackets): 🖼️ **Text from Image**
+   - Omit image text that repeats the same announcement, headline, status, date/time, or boilerplate note already stated in the tweet body—even if phrased slightly differently (e.g., an image banner saying "Maintenance Completed" when the tweet is already a Maintenance Completed notice).
+   - Keep all gameplay mechanics, stat bonuses, rewards/items, schedules, memory/potential effects, and recommended lineup descriptions that add detail or aren't already stated in the tweet.
+   - NO CASCADING DELETIONS: Never skip, trim, or summarize descriptions, stat breakdowns, or reward/item details beneath headers or icons.
+16. IMAGE SECTION & HEADER:
+   - Only output the image section when new or non-duplicated information remains after deduplication.
+   - Place a blank line above it and start with this exact header: 🖼️ **Text from Image**
 
 --- 5. EXCLUSIONS ---
 17. SIGNATURES & CREDITS: EXCLUDE copyright lines, boilerplate credits, and account signatures like 'Haikyu!! FLY HIGH... on X'.
