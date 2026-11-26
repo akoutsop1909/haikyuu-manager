@@ -15,6 +15,7 @@ COSTS = TRAINING_CONFIG["resonance_drink_cost_by_rarity"]
 BALL_NAME = ITEM_METADATA["balls"]["name"]
 BALL_EMOJI = ITEM_METADATA["balls"]["emoji"]
 DRINK_NAME = ITEM_METADATA["drinks"]["name"]
+DRINK_SINGULAR = ITEM_METADATA["drinks"]["singular"]
 DRINK_EMOJI = ITEM_METADATA["drinks"]["emoji"]
 VOUCHER_NAME = ITEM_METADATA["vouchers"]["name"]
 VOUCHER_EMOJI = ITEM_METADATA["vouchers"]["emoji"]
@@ -72,7 +73,7 @@ class TrainScreenView(BaseCardRosterView):
         else:
             res_line = f"• Max Resonance Reached! (★{MAX_RES})"
 
-        redeem_line = f"• Redeem **1** {DRINK_EMOJI} {DRINK_NAME}: {VOUCHER_EMOJI} **{REDEEM_VOUCHER_COST}**"
+        redeem_line = f"• Redeem **1** {DRINK_EMOJI} {DRINK_SINGULAR}: {VOUCHER_EMOJI} **{REDEEM_VOUCHER_COST}**"
         res_text = f"{res_line}\n{redeem_line}"
 
         embed.add_field(name="🌟 Resonance & Redeeming", value=res_text, inline=False)
@@ -151,11 +152,26 @@ class TrainScreenView(BaseCardRosterView):
         self.add_item(btn_next)
         self.add_item(btn_back)
 
-    async def update_screen(self, interaction: discord.Interaction):
-        self.user_cards[:], self.inventory = await asyncio.gather(
-            get_user_cards(self.user_id),
-            get_inventory(self.user_id)
-        )
+    async def update_screen(
+        self,
+        interaction: discord.Interaction,
+        refresh_cards: bool = True,
+        refresh_inventory: bool = True,
+    ):
+        tasks = []
+        if refresh_cards:
+            tasks.append(get_user_cards(self.user_id))
+        if refresh_inventory:
+            tasks.append(get_inventory(self.user_id))
+
+        if tasks:
+            results = await asyncio.gather(*tasks)
+            idx = 0
+            if refresh_cards:
+                self.user_cards = results[idx]
+                idx += 1
+            if refresh_inventory:
+                self.inventory = results[idx]
 
         self._setup_components()
         content, embed, attachments = await self._get_screen_payload()
@@ -177,7 +193,7 @@ class TrainScreenView(BaseCardRosterView):
 
         await lock_view_ui(self, interaction)
         await train_card(self.user_id, self.selected_card_id, levels, max_mode)
-        await self.update_screen(interaction)
+        await self.update_screen(interaction, refresh_cards=True, refresh_inventory=True)
 
     async def _handle_resonance(self, interaction: discord.Interaction):
         target_card = self._get_target_card()
@@ -185,23 +201,28 @@ class TrainScreenView(BaseCardRosterView):
         res_drink_cost = COSTS.get(rarity, 1)
 
         if self.inventory.sports_drinks < res_drink_cost:
+            drink_label = DRINK_SINGULAR if res_drink_cost == 1 else DRINK_NAME
             await interaction.response.send_message(
-                f"❌ You need at least {DRINK_EMOJI} **{res_drink_cost}** {DRINK_NAME} to increase Resonance for this player!",
+                f"❌ You need at least {DRINK_EMOJI} **{res_drink_cost}** {drink_label} to increase Resonance for this player!",
                 ephemeral=True
             )
             return
 
         await lock_view_ui(self, interaction)
         await increase_resonance(self.user_id, self.selected_card_id)
-        await self.update_screen(interaction)
+        await self.update_screen(interaction, refresh_cards=True, refresh_inventory=True)
 
     async def _handle_redeem(self, interaction: discord.Interaction):
         if self.inventory.drink_vouchers < REDEEM_VOUCHER_COST:
             await interaction.response.send_message(
-                f"❌ You need at least {VOUCHER_EMOJI} **{REDEEM_VOUCHER_COST}** {VOUCHER_NAME} to redeem **1** {DRINK_NAME}!",
+                f"❌ You need at least {VOUCHER_EMOJI} **{REDEEM_VOUCHER_COST}** {VOUCHER_NAME} to redeem **1** {DRINK_SINGULAR}!",
                 ephemeral=True
             )
             return
+
+        await lock_view_ui(self, interaction)
+        await redeem_drink(self.user_id)
+        await self.update_screen(interaction, refresh_cards=False, refresh_inventory=True)
 
         await lock_view_ui(self, interaction)
         await redeem_drink(self.user_id)

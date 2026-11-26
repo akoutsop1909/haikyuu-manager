@@ -220,6 +220,7 @@ class TripScreenView(BaseCardRosterView):
                 )
             )
 
+
         else:
             # State 5: Default card preview (Normal Selection)
             filtered_cards = self.get_filtered_cards()

@@ -40,7 +40,7 @@ class LineupRenameModal(discord.ui.Modal, title="Rename Lineup"):
 
         # Write to DB and immediately edit the original message in one atomic step
         await update_lineup_name(interaction.user.id, self.lineup_index, new_name)
-        await self.parent_view.update_screen(interaction)
+        await self.parent_view.update_screen(interaction, refresh_cards=False, refresh_lineups=True)
 
 
 class TeamScreenView(BaseCardRosterView):
@@ -216,13 +216,28 @@ class TeamScreenView(BaseCardRosterView):
             self.add_item(btn_remove_pinch)
             self.add_item(btn_cancel)
 
-    async def update_screen(self, interaction: discord.Interaction):
-        self.user_cards, self.lineups = await asyncio.gather(
-            get_user_cards(self.user_id),
-            get_lineups(self.user_id)
-        )
-        self._setup_components()
+    async def update_screen(
+        self,
+        interaction: discord.Interaction,
+        refresh_cards: bool = False,
+        refresh_lineups: bool = True,
+    ):
+        tasks = []
+        if refresh_cards:
+            tasks.append(get_user_cards(self.user_id))
+        if refresh_lineups:
+            tasks.append(get_lineups(self.user_id))
 
+        if tasks:
+            results = await asyncio.gather(*tasks)
+            idx = 0
+            if refresh_cards:
+                self.user_cards = results[idx]
+                idx += 1
+            if refresh_lineups:
+                self.lineups = results[idx]
+
+        self._setup_components()
         content, embed, attachments = await self._get_screen_payload()
 
         if not interaction.response.is_done():
@@ -233,17 +248,17 @@ class TeamScreenView(BaseCardRosterView):
     async def _handle_enter_slot_selection(self, interaction: discord.Interaction):
         await lock_view_ui(self, interaction)
         self.is_slot_selection_mode = True
-        await self.update_screen(interaction)
+        await self.update_screen(interaction, refresh_cards=False, refresh_lineups=False)
 
     async def _handle_cancel_slot_selection(self, interaction: discord.Interaction):
         await lock_view_ui(self, interaction)
         self.is_slot_selection_mode = False
-        await self.update_screen(interaction)
+        await self.update_screen(interaction, refresh_cards=False, refresh_lineups=False)
 
     async def _handle_remove_pinch(self, interaction: discord.Interaction):
         await lock_view_ui(self, interaction)
         await remove_pinch(interaction.user.id, self.selected_lineup_index)
-        await self.update_screen(interaction)
+        await self.update_screen(interaction, refresh_cards=False, refresh_lineups=True)
 
     async def _handle_rename_lineup(self, interaction: discord.Interaction):
         modal = LineupRenameModal(self, self.selected_lineup_index)
@@ -252,18 +267,18 @@ class TeamScreenView(BaseCardRosterView):
     async def _handle_clear_lineup(self, interaction: discord.Interaction):
         await lock_view_ui(self, interaction)
         self.is_clearing_confirmation = True
-        await self.update_screen(interaction)
+        await self.update_screen(interaction, refresh_cards=False, refresh_lineups=False)
 
     async def _confirm_clear_action(self, interaction: discord.Interaction):
         await lock_view_ui(self, interaction)
         await clear_lineup(interaction.user.id, self.selected_lineup_index)
         self.is_clearing_confirmation = False
-        await self.update_screen(interaction)
+        await self.update_screen(interaction, refresh_cards=False, refresh_lineups=True)
 
     async def _cancel_clear_action(self, interaction: discord.Interaction):
         await lock_view_ui(self, interaction)
         self.is_clearing_confirmation = False
-        await self.update_screen(interaction)
+        await self.update_screen(interaction, refresh_cards=False, refresh_lineups=False)
 
     def _create_slot_callback(self, slot_name: str):
         """Helper factory to generate callbacks for any position/slot button."""
@@ -271,7 +286,7 @@ class TeamScreenView(BaseCardRosterView):
             await lock_view_ui(self, interaction)
             await add_to_lineup(interaction.user.id, self.selected_lineup_index, slot_name, self.selected_card_id)
             self.is_slot_selection_mode = True
-            await self.update_screen(interaction)
+            await self.update_screen(interaction, refresh_cards=False, refresh_lineups=True)
 
         return callback
 

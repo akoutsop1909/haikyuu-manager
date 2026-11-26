@@ -55,29 +55,33 @@ class ScoutSelectMenu(discord.ui.Select):
         await self.view.update_screen(interaction)
 
 class ScoutScreenView(discord.ui.View):
-    def __init__(self, user_id: int, pulled_cards: list[dict] | None = None, balance: int = 0):
+    def __init__(self, user_id: int, pulled_cards: list[dict] | None = None, inventory=None):
         super().__init__(timeout=600)
         self.user_id = user_id
         self.pulled_cards = pulled_cards
-        self.balance = balance
+        self.inventory = inventory
         self.state = "scout"  # Can be "scout", "results", "inspect", or "failed"
         self.selected_card_data: dict | None = None
         self.dropdown: ScoutSelectMenu | None = None
+        self.failed_cost = 0
+        self.failed_balance = 0
         self._setup_components()
 
     @classmethod
     async def create(cls, user_id: int) -> tuple["ScoutScreenView", str | None, discord.Embed, list[discord.File]]:
         inventory = await get_inventory(user_id)
-        view = cls(user_id, balance=inventory.scout_coins)
+        view = cls(user_id, inventory=inventory)
         embed, attachments = await view._get_screen_payload()
         return view, None, embed, attachments
 
     async def build_embed(self) -> discord.Embed:
+        current_balance = self.inventory.scout_coins if self.inventory else 0
+
         # State 1: Inspecting a specific card from x10 results
         if self.selected_card_data:
             embed = create_card_embed(self.selected_card_data, show_level_info=False)
             self._attach_scout_status_field(embed, self.selected_card_data)
-            embed.set_footer(text=f"Balance: {COIN_EMOJI} {format_number(self.balance)}")
+            embed.set_footer(text=f"Balance: {COIN_EMOJI} {format_number(current_balance)}")
             return embed
 
         # Determine title, description, and balance value based on active state
@@ -90,7 +94,7 @@ class ScoutScreenView(discord.ui.View):
             )
             balance_val = self.failed_balance
 
-        elif self.pulled_cards:
+        elif self.pulled_cards is not None:
             # State 2: x10 Summary View Content
             results_formatted = []
             for idx, c in enumerate(self.pulled_cards, 1):
@@ -108,11 +112,10 @@ class ScoutScreenView(discord.ui.View):
 
             title = "🔍 Scout Results (x10 Pull)"
             description = "\n".join(results_formatted) + "\n\n👇 Select a player from the dropdown below to view details!"
-            balance_val = self.balance
+            balance_val = current_balance
 
         else:
             # State 3: Default Main Scout Menu Content
-            inventory = await get_inventory(self.user_id)
             cost_10x = COST_PER_PULL * 10
             rates_str = " • ".join(
                 [f"{rarity}: {weight / TOTAL_WEIGHT * 100:.0f}%" for rarity, weight in WEIGHTS.items()]
@@ -125,9 +128,8 @@ class ScoutScreenView(discord.ui.View):
                 f"• Scout x10: {COIN_EMOJI} **{cost_10x:,}**\n\n"
                 f"📊 **Drop Rates:** {rates_str}"
             )
-            balance_val = inventory.scout_coins
+            balance_val = current_balance
 
-        # Unified presentation for Failed, 10x Summary, and Main Menu states
         embed = discord.Embed(
             title=title,
             description=description,
@@ -159,7 +161,9 @@ class ScoutScreenView(discord.ui.View):
         btn_back.callback = self._handle_back
         self.add_item(btn_back)
 
-    async def update_screen(self, interaction: discord.Interaction):
+    async def update_screen(self, interaction: discord.Interaction, refresh_inventory: bool = False):
+        if refresh_inventory:
+            self.inventory = await get_inventory(self.user_id)
         self._setup_components()
         embed, attachments = await self._get_screen_payload()
         await interaction.edit_original_response(embed=embed, view=self, attachments=attachments)
@@ -180,21 +184,22 @@ class ScoutScreenView(discord.ui.View):
 
     async def _handle_scout(self, interaction: discord.Interaction, count: int):
         cost = count * COST_PER_PULL
-        inventory = await get_inventory(interaction.user.id)
+        inventory = await get_inventory(self.user_id)
         self.selected_card_data = None
 
         if inventory.scout_coins < cost:
             await lock_view_ui(self, interaction)
-            self.state = "failed"  # Switch to failure state
+            self.state = "failed"
             self.failed_cost = cost
             self.failed_balance = inventory.scout_coins
+            self.inventory = inventory
             await self.update_screen(interaction)
             return
 
         self.state = "scout"
 
         await lock_view_ui(self, interaction)
-        pulled_cards = await perform_scout(interaction.user.id, count)
+        pulled_cards = await perform_scout(self.user_id, count)
 
         if not pulled_cards:
             await interaction.followup.send(
@@ -203,20 +208,16 @@ class ScoutScreenView(discord.ui.View):
             )
             return
 
-        # Update view state
-        self.balance = inventory.scout_coins - cost
         self._cleanup_dropdown()
 
         if count == 1:
-            # x1 pull: Show the card directly without any dropdown/summary
             self.pulled_cards = None
             self.selected_card_data = pulled_cards[0]
         else:
-            # x10 pull: Show the summary list and dropdown
             self.pulled_cards = pulled_cards
             self.selected_card_data = None
 
-        await self.update_screen(interaction)
+        await self.update_screen(interaction, refresh_inventory=True)
 
     @staticmethod
     def _attach_scout_status_field(embed: discord.Embed, card_data: dict):

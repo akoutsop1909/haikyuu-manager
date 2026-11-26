@@ -1,5 +1,6 @@
 from collections import defaultdict
 from pathlib import Path
+import re
 import discord
 
 from engine.data_loader import CARDS_BY_ID, SPECIALTIES_BY_ID, BONDS_BY_ID, SYNERGIES_BY_ID, TEAM_CONFIG, ITEM_METADATA, \
@@ -57,6 +58,14 @@ def format_number(val: int) -> str:
     if val >= 10_000:
         return f"{val / 1_000:.1f}K".replace(".0K", "K")
     return f"{val:,}"
+
+def shorten_log_names(entry: str) -> str:
+    def _replace_bold(match: re.Match) -> str:
+        inner = match.group(1)
+        shortened = "/".join(get_short_name(name.strip()) for name in inner.split("/"))
+        return f"**{shortened}**"
+
+    return re.sub(r"\*\*(.+?)\*\*", _replace_bold, entry)
 
 def get_short_name(full_name: str | None) -> str:
     """Formats full player name into 'F. LastName' (e.g., 'Tobio Kageyama' -> 'T. Kageyama')."""
