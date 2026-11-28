@@ -128,7 +128,7 @@ class TrainScreenView(BaseCardRosterView):
 
         # Row 3: Resonance & Exchange Actions
         btn_res = discord.ui.Button(label="+1 Resonance", style=discord.ButtonStyle.primary, row=3)
-        btn_redeem = discord.ui.Button(label="Redeem Sports Drink", style=discord.ButtonStyle.secondary, emoji=DRINK_EMOJI, row=3)
+        btn_redeem = discord.ui.Button(label=f"Redeem {DRINK_SINGULAR}", style=discord.ButtonStyle.secondary, emoji=DRINK_EMOJI, row=3)
 
         btn_res.disabled = is_max_resonance
         btn_res.callback = self._handle_resonance
@@ -155,23 +155,19 @@ class TrainScreenView(BaseCardRosterView):
     async def update_screen(
         self,
         interaction: discord.Interaction,
-        refresh_cards: bool = True,
-        refresh_inventory: bool = True,
+        refresh_cards: bool = False,
+        refresh_inventory: bool = False,
     ):
-        tasks = []
-        if refresh_cards:
-            tasks.append(get_user_cards(self.user_id))
-        if refresh_inventory:
-            tasks.append(get_inventory(self.user_id))
+        async def _noop(value):
+            return value
 
-        if tasks:
-            results = await asyncio.gather(*tasks)
-            idx = 0
-            if refresh_cards:
-                self.user_cards = results[idx]
-                idx += 1
-            if refresh_inventory:
-                self.inventory = results[idx]
+        cards, inventory = await asyncio.gather(
+            get_user_cards(self.user_id) if refresh_cards else _noop(self.user_cards),
+            get_inventory(self.user_id) if refresh_inventory else _noop(self.inventory),
+        )
+
+        self.user_cards = cards
+        self.inventory = inventory
 
         self._setup_components()
         content, embed, attachments = await self._get_screen_payload()
@@ -198,7 +194,7 @@ class TrainScreenView(BaseCardRosterView):
     async def _handle_resonance(self, interaction: discord.Interaction):
         target_card = self._get_target_card()
         rarity = target_card["rarity"]
-        res_drink_cost = COSTS.get(rarity, 1)
+        res_drink_cost = COSTS[rarity]
 
         if self.inventory.sports_drinks < res_drink_cost:
             drink_label = DRINK_SINGULAR if res_drink_cost == 1 else DRINK_NAME
@@ -222,11 +218,7 @@ class TrainScreenView(BaseCardRosterView):
 
         await lock_view_ui(self, interaction)
         await redeem_drink(self.user_id)
-        await self.update_screen(interaction, refresh_cards=False, refresh_inventory=True)
-
-        await lock_view_ui(self, interaction)
-        await redeem_drink(self.user_id)
-        await self.update_screen(interaction)
+        await self.update_screen(interaction, refresh_inventory=True)
 
     async def _get_screen_payload(self) -> tuple[str, discord.Embed, list[discord.File]]:
         """Helper to build content, embed, and attachments for the training screen."""

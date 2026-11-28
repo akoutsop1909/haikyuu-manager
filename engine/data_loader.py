@@ -80,7 +80,7 @@ ITEM_METADATA = {
     "pass": {"name": "Match Passes", "singular": "Match Pass", "emoji": "🪪"},
     "coins": {"name": "Scout Coins", "singular": "Scout Coin", "emoji": "🪙"},
     "balls": {"name": "Practice Balls", "singular": "Practice Ball", "emoji": "🏐"},
-    "drinks": {"name": "Sports Drinks", "singular": "Sport Drink", "emoji": "🥤"},
+    "drinks": {"name": "Sports Drinks", "singular": "Sports Drink", "emoji": "🥤"},
     "vouchers": {"name": "Drink Vouchers", "singular": "Drink Voucher", "emoji": "🎟️"},
     "scraps": {"name": "Voucher Scraps", "singular": "Voucher Scrap", "emoji": "🧾"},
 }

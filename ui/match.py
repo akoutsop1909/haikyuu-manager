@@ -13,7 +13,7 @@ from database import get_lineups, get_inventory, get_user_cards, get_or_create_o
 
 DIFFICULTY_EMOJIS = {"Casual": "🌱", "Easy": "👟", "Normal": "⚡", "Hard": "💥", "Nightmare": "💀"}
 
-# Load match configurations & item medatadata shortcuts
+# Load match configurations & item metadata shortcuts
 DIFFICULTY_REWARDS = MATCH_CONFIG["difficulties"]
 DEFAULT_LINEUP_NAME = TEAM_CONFIG["default_lineup_name_format"]
 PASS_COST = MATCH_CONFIG["pass_cost"]
@@ -68,6 +68,7 @@ class MatchScreenView(BaseCardRosterView):
                  selected_card_id: str | None = None, initial_opponent: dict | None = None,
                  inventory=None):
         super().__init__(user_id, user_cards, selected_card_id)
+        self._render_boosted_stats: dict | None = None
         self.selected_lineup_index = 1
         self.lineups = lineups or {}
         self.state = "opponent_select"
@@ -100,7 +101,12 @@ class MatchScreenView(BaseCardRosterView):
             return None  # No court display text needed on opponent or results screens
 
         team_data = self.lineups.get(self.selected_lineup_index, {})
-        return format_lineup_court_display(team_data, self.user_cards, self.selected_lineup_index)
+        return format_lineup_court_display(
+            team_data,
+            self.user_cards,
+            self.selected_lineup_index,
+            boosted_stats_map=self._render_boosted_stats,
+        )
 
     async def build_embed(self) -> discord.Embed | None:
         # State 1: Opponent Scouting & Selection
@@ -141,9 +147,9 @@ class MatchScreenView(BaseCardRosterView):
 
             embed.add_field(name="🎽 Opponent Lineup", value="\n".join(player_lines), inline=False)
 
-            rew_cfg = DIFFICULTY_REWARDS.get(self.selected_difficulty, {}).get("rewards", {})
-            win_line = self._format_reward_line(rew_cfg.get("win", {}), prefix="• **Win:** ")
-            loss_line = self._format_reward_line(rew_cfg.get("loss", {}), prefix="• **Loss:** ")
+            rew_cfg = DIFFICULTY_REWARDS[self.selected_difficulty]["rewards"]
+            win_line = self._format_reward_line(rew_cfg["win"], prefix="• **Win:** ")
+            loss_line = self._format_reward_line(rew_cfg["loss"], prefix="• **Loss:** ")
             redeem_line = f"• Redeem **1** {VOUCHER_EMOJI} {VOUCHER_SINGULAR}: {SCRAP_EMOJI} **{SCRAP_COST}**"
 
             embed.add_field(
@@ -175,11 +181,11 @@ class MatchScreenView(BaseCardRosterView):
             user_team_name = lineup_data.get("lineup_name") or DEFAULT_LINEUP_NAME.format(self.selected_lineup_index)
             opp_team_name = f"{self.selected_difficulty} Opponent"
 
-            rew = DIFFICULTY_REWARDS.get(self.selected_difficulty, {}).get("rewards", {}).get(outcome_key, {})
+            rew = DIFFICULTY_REWARDS[self.selected_difficulty]["rewards"][outcome_key]
             rewards_line = self._format_reward_line(rew, prefix="🎁 **Rewards:** ", sep="  ")
 
             score_section = (
-                f"📊 **Final Score:**\n"
+                f"🆚 **Final Score:**\n"
                 f"{user_team_name} `{user_score}` - `{opp_score}` {opp_team_name}\n"
                 f"{rewards_line}"
             )
@@ -192,21 +198,21 @@ class MatchScreenView(BaseCardRosterView):
             max_len = 1024
             notice = "\n*(...earlier rallies truncated)*"
             lines: list[str] = []
+            current_len = 0
 
             for entry in match_log:
                 short_entry = shorten_log_names(entry)
                 candidate = short_entry if not lines else f"\n{short_entry}"
-                current_len = sum(len(x) for x in lines)
 
                 if current_len + len(candidate) + len(notice) > max_len:
                     lines.append(notice)
                     break
 
                 lines.append(candidate)
+                current_len += len(candidate)
 
             log_text = "".join(lines)
             embed.add_field(name="📜 Match Log", value=log_text, inline=False)
-
 
         else:
             # State 3: Lineup Selection & Card Preview (Default Fallthrough)
@@ -218,7 +224,11 @@ class MatchScreenView(BaseCardRosterView):
                 return None
 
             team_data = self.lineups.get(self.selected_lineup_index, {})
-            boosted_stats_map = apply_lineup_boosts(team_data, self.user_cards)
+            boosted_stats_map = (
+                self._render_boosted_stats
+                if self._render_boosted_stats is not None
+                else apply_lineup_boosts(team_data, self.user_cards)
+            )
             target_slot = next((slot for slot, cid in team_data.items() if cid == target_card["id"]), None)
             card_stats = boosted_stats_map.get(
                 target_slot, target_card.get("scaled_stats", target_card.get("base_stats", {}))
@@ -254,7 +264,7 @@ class MatchScreenView(BaseCardRosterView):
             self.add_item(btn_refresh)
 
             # Row 2: Redeem Drink Voucher & Back buttons
-            btn_redeem = discord.ui.Button(label="Redeem Drink Voucher", style=discord.ButtonStyle.secondary,
+            btn_redeem = discord.ui.Button(label=f"Redeem {VOUCHER_SINGULAR}", style=discord.ButtonStyle.secondary,
                 emoji=VOUCHER_EMOJI, row=2)
             btn_redeem.callback = self._handle_redeem_voucher_click
             self.add_item(btn_redeem)
@@ -306,27 +316,22 @@ class MatchScreenView(BaseCardRosterView):
         self,
         interaction: discord.Interaction,
         refresh_opponent: bool = False,
-        refresh_lineups: bool = True,
+        opponent: dict | None = None,
     ):
-        tasks = [get_inventory(self.user_id)]
-        if refresh_lineups:
-            tasks.append(get_lineups(self.user_id))
+        need_opponent_fetch = opponent is None and (refresh_opponent or not self.current_opponent)
 
-        should_fetch_opponent = refresh_opponent or not self.current_opponent
-        if should_fetch_opponent:
-            tasks.append(get_or_create_opponent(self.user_id, self.selected_difficulty))
+        async def _noop(value):
+            return value
 
-        results = await asyncio.gather(*tasks)
-        idx = 0
-        self.inventory = results[idx]
-        idx += 1
+        inventory, fetched_opponent = await asyncio.gather(
+            get_inventory(self.user_id),
+            get_or_create_opponent(self.user_id, self.selected_difficulty)
+            if need_opponent_fetch
+            else _noop(self.current_opponent),
+        )
 
-        if refresh_lineups:
-            self.lineups = results[idx]
-            idx += 1
-
-        if should_fetch_opponent:
-            self.current_opponent = results[idx]
+        self.inventory = inventory
+        self.current_opponent = opponent if opponent is not None else fetched_opponent
 
         self._setup_components()
         content, embed, attachments = await self._get_screen_payload()
@@ -336,18 +341,18 @@ class MatchScreenView(BaseCardRosterView):
         await lock_view_ui(self, interaction)
         self.state = "opponent_select"  # Switch back to opponent menu
         self.selected_card_id = None
-        await self.update_screen(interaction, refresh_lineups=False)
+        await self.update_screen(interaction)
 
     async def _handle_challenge_click(self, interaction: discord.Interaction):
         await lock_view_ui(self, interaction)
         self.state = "lineup_select"  # Switch state to lineup selection
-        await self.update_screen(interaction, refresh_lineups=False)
+        await self.update_screen(interaction)
 
     async def _handle_refresh_click(self, interaction: discord.Interaction):
         await lock_view_ui(self, interaction)
         await consume_match_refresh(self.user_id)
-        await get_or_create_opponent(self.user_id, self.selected_difficulty, force_regenerate=True)
-        await self.update_screen(interaction, refresh_opponent=True, refresh_lineups=False)
+        new_opponent = await get_or_create_opponent(self.user_id, self.selected_difficulty, force_regenerate=True)
+        await self.update_screen(interaction, opponent=new_opponent)
 
     async def _handle_redeem_voucher_click(self, interaction: discord.Interaction):
         if self.inventory.voucher_scraps < SCRAP_COST:
@@ -359,7 +364,7 @@ class MatchScreenView(BaseCardRosterView):
 
         await lock_view_ui(self, interaction)
         await redeem_voucher(self.user_id)
-        await self.update_screen(interaction, refresh_lineups=False)
+        await self.update_screen(interaction)
 
     async def _handle_play_again(self, interaction: discord.Interaction):
         await lock_view_ui(self, interaction)
@@ -367,11 +372,10 @@ class MatchScreenView(BaseCardRosterView):
         did_win = res.get("user_score", 0) > res.get("opponent_score", 0)
 
         self.state = "opponent_select"
+        new_opponent = None
         if did_win:
-            self.current_opponent = await get_or_create_opponent(
-                self.user_id, self.selected_difficulty, force_regenerate=True
-            )
-        await self.update_screen(interaction, refresh_opponent=not did_win, refresh_lineups=False)
+            new_opponent = await get_or_create_opponent(self.user_id, self.selected_difficulty, force_regenerate=True)
+        await self.update_screen(interaction, refresh_opponent=not did_win, opponent=new_opponent)
 
     async def play_callback(self, interaction: discord.Interaction):
         await lock_view_ui(self, interaction)
@@ -410,8 +414,16 @@ class MatchScreenView(BaseCardRosterView):
         return f"{prefix}{sep.join(parts)}"
 
     async def _get_screen_payload(self) -> tuple[str | None, discord.Embed | None, list[discord.File]]:
-        content = await self.build_content()
-        embed = await self.build_embed()
+        needs_lineup_boosts = self.state == "lineup_select"
+        if needs_lineup_boosts:
+            team_data = self.lineups.get(self.selected_lineup_index, {})
+            self._render_boosted_stats = apply_lineup_boosts(team_data, self.user_cards)
+
+        try:
+            content = await self.build_content()
+            embed = await self.build_embed()
+        finally:
+            self._render_boosted_stats = None
 
         if self.state in ("opponent_select", "match_results"):
             attachments = []

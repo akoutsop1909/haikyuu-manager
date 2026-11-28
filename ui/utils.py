@@ -117,9 +117,10 @@ def get_card_image_file(card_data: dict) -> discord.File | None:
 # ==============================================================================
 # 3. EMBED & COURT DISPLAY BUILDERS
 # ==============================================================================
-def calculate_team_context(lineup_data: dict, user_cards: list[dict]) -> dict:
+def calculate_team_context(lineup_data: dict, user_cards: list[dict], boosted_stats_map: dict | None = None,) -> dict:
     """Calculates core team power, active bonds, active synergy school, and associated display metadata."""
-    boosted_stats_map = apply_lineup_boosts(lineup_data, user_cards)
+    if boosted_stats_map is None:
+        boosted_stats_map = apply_lineup_boosts(lineup_data, user_cards)
 
     card_lookup = {c["id"]: c for c in user_cards}
     team_power = 0
@@ -169,9 +170,10 @@ def calculate_team_context(lineup_data: dict, user_cards: list[dict]) -> dict:
         "synergy_description": syn_desc
     }
 
-def format_lineup_court_display(lineup_data: dict, user_cards: list[dict], lineup_index: int = 1) -> str:
+def format_lineup_court_display(lineup_data: dict, user_cards: list[dict], lineup_index: int = 1,
+    boosted_stats_map: dict | None = None,) -> str:
     """Builds the ASCII court layout and summary text."""
-    ctx = calculate_team_context(lineup_data, user_cards)
+    ctx = calculate_team_context(lineup_data, user_cards, boosted_stats_map=boosted_stats_map)
     lineup_name = lineup_data.get("lineup_name", f"Lineup {lineup_index}")
 
     # 1. Build summary string using pre-calculated context
@@ -380,8 +382,9 @@ class LineupSelectMenu(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         await lock_view_ui(self.view, interaction)
         self.view.selected_lineup_index = int(self.values[0])
+        if hasattr(self.view, "is_clearing_confirmation"):
+            self.view.is_clearing_confirmation = False
         await self.view.update_screen(interaction)
-
 
 class BaseCardRosterView(discord.ui.View):
     PAGE_SIZE = 25

@@ -9,16 +9,16 @@ from engine.data_loader import TOKYO_TRIP_CONFIG, ITEM_METADATA, STARTING_SLOTS,
 from database import get_user_cards, get_lineups, get_trip_squads, add_to_trip_squad, clear_trip_squad, \
     get_tokyo_trip_start, start_tokyo_trip, claim_tokyo_trip
 
-# Load Tokyo trip configurations & item medatadata shortcuts
+# Load Tokyo trip configurations & item metadata shortcuts
 TOKYO_TRIP_MIN_OWNED = TOKYO_TRIP_CONFIG["min_r_sr_owned"]
 TOKYO_TRIP_MAX_PLAYERS = TOKYO_TRIP_CONFIG["max_players"]
 TOKYO_TRIP_MAX_SQUADS = TOKYO_TRIP_CONFIG["max_squads"]
 DEFAULT_SQUAD_NAME = TOKYO_TRIP_CONFIG["default_squad_name_format"]
-ALLOWED_RARITIES = tuple(TOKYO_TRIP_CONFIG.get("allowed_rarities", ["R", "SR"]))
+ALLOWED_RARITIES = tuple(TOKYO_TRIP_CONFIG["allowed_rarities"])
 RARITY_LABEL = "/".join(ALLOWED_RARITIES)
-REWARDS_CONFIG = TOKYO_TRIP_CONFIG.get("rewards_by_rarity", {})
-R_R = REWARDS_CONFIG.get("R", {"scout_coins": 30, "practice_balls": 150})
-SR_R = REWARDS_CONFIG.get("SR", {"scout_coins": 50, "practice_balls": 200})
+REWARDS_CONFIG = TOKYO_TRIP_CONFIG["rewards_by_rarity"]
+R_R = REWARDS_CONFIG["R"]
+SR_R = REWARDS_CONFIG["SR"]
 INTERVAL_HOURS = TOKYO_TRIP_CONFIG["milestone_interval_hours"]
 EXHAUSTION_HOURS = TOKYO_TRIP_CONFIG["exhaustion_hours"]
 MAX_DURATION_HOURS = TOKYO_TRIP_CONFIG["max_duration_hours"]
@@ -65,6 +65,8 @@ class TripScreenView(BaseCardRosterView):
                  trip_squads: dict[int, dict] | None = None,
                  assigned_card_ids: set[str] | None = None):
         super().__init__(user_id, user_cards, selected_card_id)
+        self._render_filtered_cards: list[dict] | None = None
+        self._render_rewards = None
         self.all_user_cards = all_user_cards or user_cards
         self.is_active_trip = is_active_trip
         self.trip_start = trip_start
@@ -100,8 +102,8 @@ class TripScreenView(BaseCardRosterView):
         cards = super().get_filtered_cards()
         return [c for c in cards if c.get("rarity") in ALLOWED_RARITIES]
 
-    async def build_content(self) -> str | None:
-        filtered_cards = self.get_filtered_cards()
+    async def build_content(self, filtered_cards: list[dict] | None = None) -> str | None:
+        filtered_cards = self.get_filtered_cards() if filtered_cards is None else filtered_cards
         if self.is_active_trip or not filtered_cards:
             return None
 
@@ -135,10 +137,15 @@ class TripScreenView(BaseCardRosterView):
 
     async def build_embed(self) -> discord.Embed:
         banner_filename = "tokyo_trip.jpg"
+        filtered_cards = (self._render_filtered_cards if self._render_filtered_cards is not None else self.get_filtered_cards())
 
         # State 1: Active Trip
         if self.is_active_trip:
-            rewards = calculate_tokyo_trip_rewards(self.trip_start, self.user_cards)
+            rewards = (
+                self._render_rewards
+                if self._render_rewards is not None
+                else calculate_tokyo_trip_rewards(self.trip_start, self.user_cards)
+            )
             squad_name = self._get_current_squad_name()
 
             player_lines = [
@@ -211,7 +218,7 @@ class TripScreenView(BaseCardRosterView):
             )
 
         # State 4: No available filtered cards left
-        elif not self.get_filtered_cards():
+        elif not filtered_cards:
             embed = discord.Embed(
                 title="⚠️ No Players Available for the Trip",
                 description=(
@@ -220,10 +227,8 @@ class TripScreenView(BaseCardRosterView):
                 )
             )
 
-
         else:
             # State 5: Default card preview (Normal Selection)
-            filtered_cards = self.get_filtered_cards()
             target_card = self._get_target_card(filtered_cards)
             scaled_stats = target_card["scaled_stats"]
             return create_card_embed(target_card, extra_stats=scaled_stats, show_quote=False)
@@ -548,20 +553,26 @@ class TripScreenView(BaseCardRosterView):
         }
 
     async def _get_screen_payload(self) -> tuple[str | None, discord.Embed, list[discord.File]]:
-        """Helper to build content, embed, and attachments for the trip screen."""
-        content = await self.build_content()
-        embed = await self.build_embed()
-
         filtered_cards = self.get_filtered_cards()
+        active_rewards = (
+            calculate_tokyo_trip_rewards(self.trip_start, self.user_cards)
+            if self.is_active_trip
+            else None
+        )
 
-        # Determine whether to show the banner or the selected card image
+        self._render_filtered_cards = filtered_cards
+        self._render_rewards = active_rewards
+        try:
+            content = await self.build_content(filtered_cards)
+            embed = await self.build_embed()
+        finally:
+            self._render_filtered_cards = None
+            self._render_rewards = None
+
         if self.is_active_trip or not filtered_cards:
             banner_key = "tokyo_trip"
-
-            if self.is_active_trip:
-                rewards = calculate_tokyo_trip_rewards(self.trip_start, self.user_cards)
-                if rewards.max_duration_ts is None:
-                    banner_key = "tokyo_trip_complete"
+            if self.is_active_trip and active_rewards is not None and active_rewards.max_duration_ts is None:
+                banner_key = "tokyo_trip_complete"
 
             banner_file = get_banner_file(banner_key)
             attachments = [banner_file] if banner_file else []
